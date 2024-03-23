@@ -5,6 +5,7 @@ NVR_Flags_8099	= %10000000			\\ Year is '80 - '99
 NVR_Flags_FLY	= %01000000			\\ False leap year, not yet corrected
 NVR_HourOffset	= &FD				\\ Offset from UTC for timezone & summertime
 NVR_MinuteOffset= &FC				\\ Not currently implemented
+NVR_SetTime		= &F0				\\ time clock was set, in UTC
 
 \*******************************************************\
 \														\
@@ -21,8 +22,6 @@ TempMonth			= TempSpace+5		\\ months, 01 - 12 BCD
 TempYear			= TempSpace+6		\\ year, 00 - 99 BCD
 TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
 
-
-
 \*******************************************************\
 \														\
 \				Read RTC registers						\
@@ -33,7 +32,18 @@ TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
 .RTC_readTime				\\ Read date & time from RTC & correct using flags
 	LDA #RTC_TD_sec			\\ seconds register
 	LDX #7					\\ seconds, minutes, hours, days, weekdays, months, years
+	LDY #0
 	JSR RTC_readBytes
+	LDA TempSecond			\\ if seconds are invalid, everything is
+	BPL timeOK
+	LDA #&FF
+	LDX #7
+.copyloop2
+	STA TempSpace,X
+	DEX
+	BPL copyloop2
+	RTS
+.timeOK
 	LDX #NVR_Century
 	SEC
 	JSR FRAM_readByte		\\ look up century
@@ -126,8 +136,18 @@ TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
 	LDA #RTC_TD_sec
 	LDY #0					\\ start from TempSpace
 	LDX #3					\\ seconds, minutes, hours
+	JSR RTC_sendBytes
+IF SAVE_SETTIME
+	LDA #RTC_TD_day
+	LDX #4					\\ day, wkday, month, year
+	JSR RTC_readBytes
+	LDX #NVR_Century
+	SEC
+	JSR FRAM_readByte		\\ get century
+	STY TempCentury
+	JMP RTC_saveSetTime
+ENDIF
 	SEC						\\ no error
-	JMP RTC_sendBytes		\\ flags are saved
 .badString
 	RTS						\\ carry is clear
 	
@@ -138,7 +158,14 @@ TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
 	LDY #3					\\ start from TempSpace+3
 	LDX #4					\\ day, weekday, month, year
 	JSR RTC_sendBytes
-	JMP RTC_setCentury
+	JSR RTC_setCentury
+IF SAVE_SETTIME
+	LDA #RTC_TD_sec
+	LDY #0					\\ start from TempSpace
+	LDX #3					\\ seconds, minutes, hours
+	JSR RTC_readBytes
+	JMP RTC_saveSetTime
+ENDIF
 
 .RTC_setDateTime			\\ set date & time from string in format www,dd mmm yyyy.hh:mm:ss in (OSWORDPtr),Y
 	JSR RTC_ParseDate
@@ -153,6 +180,10 @@ TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
 	LDY #0					\\ start from TempSpace
 	LDX #7					\\ seconds, minutes, hours, day, weekday, month, year
 	JSR RTC_sendBytes
+IF SAVE_SETTIME
+	JSR RTC_setCentury
+	JMP RTC_saveSetTime
+ENDIF
 
 .RTC_setCentury				\\ set century from contents of TempSpace+7 & flags from date in TempSpace
 	LDY TempCentury			\\ Century
@@ -231,56 +262,83 @@ TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
 .noChange
 	RTS
 	
-IF INC_SECONDS
 .RTC_incSeconds				\\ adjust time depending on string S+ss.cc or S-ss.cc
 	JSR RTC_ParseInc
 	BCC noChange			\\ not recognised
 	SED
 	LDA #&50
 	SBC TempSpace2			\\ calculate 50-cc; C is set
-	STA TempSpace2
+	STA TempSpace2			\\ save (50-cc)MOD100
 	ROL A					\\ put C in bit 0
 	EOR #1					\\ flip it
 	ROR A					\\ put it back
 	LDA TempSpace2+1
 	ADC #0					\\ add C
-	STA TempSpace2+1		\\ calculate ss - (50 - cc)DIV100
+	PHA						\\ save ss - (50 - cc)DIV100; TempSpace2+1 is mangled by BCDtoBinary
 	CLD
 	LDA TempSpace2			\\ (50 - cc)MOD100
-	TAY
-	AND #&0F				\\ low digit
+	JSR BCDtoBinary			\\ low digit + high digit * 10
 	STA TempSpace2
-	TYA
-	AND #&F0				\\ high digit * 16
-	LSR A					\\ high digit * 8
-	TAY
-	ADC TempSpace2			\\ C is clear from shift
-	STA TempSpace2			\\ low digit + high digit * 8
-	TYA
-	LSR A
-	LSR A					\\ high digit * 2
-	ADC TempSpace2			\\ C is clear from shift
-	STA TempSpace2			\\ low digit + high digit * 10
-	PHA						\\ TempSpace2 is not preserved by readTime or addSeconds
-	JSR RTC_Synchronise
-	LDX TempSpace2
-	JSR RTC_setupDelay
+	JSR RTC_Synchronise		\\ wait for seconds to tick
+	LDX TempSpace2			\\ (50 - cc)MOD100 binary
+	JSR RTC_setupDelay		\\ start counting centiseconds
 	JSR RTC_readTime
-	LDA TempSpace2+1		\\ ss - (50 - cc)DIV100
+	PLA						\\ ss - (50 - cc)DIV100
 	SED
 	JSR RTC_addSeconds		
 	CLD
-	PLA						\\ delay time
-	BEQ noDelay2
-	JSR RTC_delay
-.noDelay2
+	JSR RTC_delay			\\ wait for centisecond count
 	JSR RTC_stopClock		\\ clear clock dividers
 	LDA #RTC_TD_sec
 	LDY #0					\\ start from TempSpace
 	LDX #7					\\ seconds, minutes, hours, day, weekday, month, year
 	JSR RTC_sendBytes		\\ set new time
 	JSR RTC_startClock		\\ restart clock
+IF SAVE_SETTIME
+	JMP RTC_saveSetTime
+ELSE
 	SEC
+	RTS
+ENDIF
+
+IF CALIBRATION
+.RTC_tuneClock
+	JSR RTC_ParseTuningOffset
+	BCC badParse
+	STA TempSpace2
+	LDA #RTC_offset
+	JSR RTC_readByte
+	TXA
+	ASL A					\\ double & put mode in C, sign in bit 7
+	BCS courseMode
+	BPL offsetpos
+	SEC						\\set C = N
+.offsetpos
+	ROR A					\\ if in fine mode, undouble it, preserving sign
+.courseMode
+	CLC
+	ADC TempSpace2			\\ calc new value
+	BVC noOverflow
+	LDA #&7F				\\ max value
+	ADC #0					\\ C is sign after overflow
+.noOverflow
+	STA TempSpace2
+	BIT TempSpace2			\\ check bits 6 & 7
+	BVC noFlip
+	BPL useCourse
+	AND #&7F
+	BVS doneOffset
+.noFlip
+	BPL doneOffset
+.useCourse
+	SEC
+	ROR A
+.doneOffset	
+	TAX
+	LDA #RTC_offset
+	SEC
+	JMP RTC_sendByte
+.badParse
 	RTS
 ENDIF
 
@@ -290,7 +348,6 @@ ENDIF
 \														\
 \*******************************************************\
 
-IF INC_SECONDS
 .RTC_addSeconds				\\ add accumulator seconds to time in RTC format. -20 <= A <= 20. Assumes D set
 	CLC
 	ADC TempSecond			\\ Seconds
@@ -327,8 +384,6 @@ IF INC_SECONDS
 	SBC #&60				\\ C is set
 	STA TempMinute
 	LDA #&1					\\ carry +1
-ENDIF
-
 .RTC_addHours				\\ add accumulator hours to time in RTC format. -38<=A<=38. Assumes D set
 	CLC
 	ADC TempHour			\\ Hours
@@ -466,4 +521,3 @@ ENDIF
 	LDA #&29				\\ February, leap year
 	RTS
 
-	

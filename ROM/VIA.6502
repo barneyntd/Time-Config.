@@ -196,13 +196,12 @@ FRAM_HIADDR		= %00001000		\\ Use address &100 to &1FF
 	
 
 .RTC_readBytes	   			\\ read RTC registers in ascending order;
-							\\ A=start register, X=no of bytes, data in TempSpace
+							\\ A=start register, X=no of bytes, data in TempSpace,Y
 	PHP						\\ save interrupt mask
 	SEI						\\ block interrupts
 	ORA #RTC_read
 	JSR RTC_startComm		\\ start register read
 	JSR VIA_inputMode
-	LDY #0
 .readBytesLoop
 	JSR VIA_readByte
 	STA TempSpace,Y			\\ save it
@@ -213,7 +212,19 @@ FRAM_HIADDR		= %00001000		\\ Use address &100 to &1FF
 	PLP						\\ restore interrupt mask
 	RTS
 
-IF INC_SECONDS
+.RTC_readByte	   			\\ read one RTC register;
+							\\ A=register, X=data
+	PHP						\\ save interrupt mask
+	SEI						\\ block interrupts
+	ORA #RTC_read
+	JSR RTC_startComm		\\ start register read
+	JSR VIA_inputMode
+	JSR VIA_readByte
+	TAX
+	JSR VIA_endComm			\\ clean up
+	PLP						\\ restore interrupt mask
+	RTS
+
 .RTC_Synchronise			\\ wait for the seconds to tick over
 	LDA #IER_disable OR IER_T2
 	STA VIA_ier				\\ disable T2 interrupt
@@ -230,26 +241,30 @@ IF INC_SECONDS
 
 
 .RTC_setupDelay				\\ set up clock & via for delay of X centiseconds
+	BEQ noDelay
 	DEX						\\ T2 counts n+1
-	BMI noDelay
 	LDA VIA_acr
 	ORA #ACR_T2_count
 	STA VIA_acr				\\ timer 2 countdown mode
 	STX VIA_t2cl			\\ set count
-	LDA #RTC_TI_4096		\\ 4096 Hz
-	STA TempSpace
-	LDA #41					\\ 41 counts
-	STA TempSpace+1
-	LDY #0
-	LDX #2
+	LDX #RTC_TI_4096		\\ 4096 Hz
 	LDA #RTC_TI
-	JSR RTC_sendBytes		\\ set timer to 100Hz
+	JSR RTC_sendByte
+	LDX #41					\\ 4096/41 = 100Hz
+	LDA #RTC_TI_time
+	JSR RTC_sendByte		\\ start pulses
 	LDA #0
 	STA VIA_t2ch			\\ start counting
 	LDX #RTC_C2_TITP OR RTC_C2_TIE
 	LDA #RTC_C2
-	JSR RTC_sendByte		\\ turn on countdown alarm
+	JMP RTC_sendByte		\\ turn on countdown alarm and return
 .noDelay
+	LDA VIA_acr
+	AND #LO(NOT(ACR_T2_count))
+	STA VIA_acr				\\ timer 2 timer mode
+	LDA #0
+	STA VIA_t2cl
+	STA VIA_t2ch			\\ count one microsecond, then set ifr
 	RTS
 	
 .RTC_delay					\\ wait for T2 to countdown past zero
@@ -269,9 +284,10 @@ IF INC_SECONDS
 .RTC_startClock
 	LDX #0
 	LDA #RTC_C1
-	JMP RTC_sendByte		\\ start clock and return
+	JSR RTC_sendByte		\\ start clock
+	LDA #RTC_C2
+	JMP RTC_sendByte		\\ turn off interrupts and return
 
-ENDIF
 \*******************************************************\
 \														\
 \				Communicate with FRAM					\
@@ -323,3 +339,42 @@ ENDIF
 	JSR VIA_endComm				\\ clean up
 	PLP							\\ restore interrupt mask
 	RTS
+
+IF SAVE_ALARMS OR SAVE_SETTIME
+.FRAM_writeBytes				\\ write Y bytes to FRAM start address = X + 256 from TempSpace
+	PHP							\\ save interrupt mask
+	SEI							\\ block interrupts
+	LDA #FRAM_WREN
+	JSR FRAM_startComm			\\ enable write
+	JSR VIA_endComm
+	LDA #FRAM_WRITE OR FRAM_HIADDR
+	JSR FRAM_startComm			\\ start memory write
+	TXA
+	JSR VIA_sendByte			\\ send address
+.writeFramLoop
+	LDA TempSpace-1,Y			\\ get byte
+	JSR VIA_sendByte			\\ send byte to FRAM
+	DEY
+	BNE writeFramLoop
+	JSR VIA_endComm				\\ clean up
+	PLP							\\ restore interrupt mask
+	RTS
+
+.FRAM_readBytes					\\ read Y bytes from FRAM start address = X + 256 to TempSpace
+	PHP							\\ save interrupt mask
+	SEI							\\ block interrupts
+	LDA #FRAM_READ OR FRAM_HIADDR
+	JSR FRAM_startComm			\\ start memory read
+	TXA
+	JSR VIA_sendByte			\\ send address
+	JSR VIA_inputMode
+.readFramLoop
+	JSR VIA_readByte			\\ read byte from FRAM
+	STA TempSpace-1,Y			\\ save it
+	DEY
+	BNE readFramLoop
+	JSR VIA_endComm				\\ clean up
+	PLP							\\ restore interrupt mask
+	RTS
+ENDIF
+

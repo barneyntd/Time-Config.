@@ -14,8 +14,11 @@ OSNEWL		= &FFE7
 GSREAD		= &FFC5
 GSINIT		= &FFC2
 
-DEBUG_CLOCK = 1			\\ change OSBYTE &A1 & &A2 to read upper page of NVRAM
-INC_SECONDS = 1			\\ implement S+-ss.cc to adjust clock to centisecond
+DEBUG_CLOCK = 0			\\ change OSBYTE &A1 & &A2 to read upper page of NVRAM
+SAVE_ALARMS = 0			\\ implement Ann=... to save dates & times in NVRAM
+SAVE_SETTIME = 1		\\ save date & time of last set in UTC
+CALIBRATION = 1			\\ implement C+-cc to adjust offset register
+
 
 ORG &8000
 
@@ -140,7 +143,6 @@ ENDIF
 	LDY #0
 	STY OSWORDPtr+1
 	JSR RTC_readTimeString	\\ read current time and send to OSWRCH
-	JSR OSNEWL
 	LDA #0
 	JMP done
 .notTime
@@ -209,72 +211,128 @@ ENDIF
 	LDA #0
 	RTS
 .notConvertBCDTime
+	CMP #7					\\ 7: read timezone as signed BCD
+	BNE notReadTimezone	
+	JSR RTC_ReadTimezoneBCD
+	LDA #0
+	RTS
+.notReadTimezone
+IF SAVE_ALARMS OR SAVE_SETTIME
+	INY
+	CMP #5					\\ 5: read alarm date & time as string
+	BNE notReadAlarmString
+	LDA (OSWORDPtr),Y		\\ alarm number determined by second byte in buffer
+	JSR RTC_readAlarmString
+	LDA #0
+	RTS
+.notReadAlarmString
+	CMP #6					\\ 6: read alarm date & time as BCD
+	BNE notReadAlarmBCD
+	LDA (OSWORDPtr),Y		\\ alarm number determined by second byte in buffer
+	JSR RTC_readAlarmBCD
+	LDA #0
+	RTS
+.notReadAlarmBCD
+ENDIF
 	LDA #8
 	RTS
-
-
 
 .OSWORD0F					\\ set date, time & alarm from string. Preserves X, Y, sets A to 0 if done or 8 if not done
 	LDY #0
 	LDA (OSWORDPtr),Y
+	BEQ OSW_unused
 	INY
 .doOSWORD0F
-IF INC_SECONDS
-	CMP #1					\\ 1: S: sync with seconds tick
-	BNE notSecondSync
-	LDA (OSWORDPtr),Y		\\ check character
+	CMP #25
+	BCS OSW_unused
+IF SAVE_ALARMS
+	ASL A					\\ 2 - 48 even
+	TAX
+	LDA (OSWORDPtr),Y
 	AND #LO(NOT(&20))		\\ ignore capitalisation
-	CMP #'S'
-	BNE notSetDateTime
-	JSR RTC_Synchronise
-	JMP doneOSWORD0f
-.notSecondSync
+	CMP #'A'				\\ check for alarm
+	BEQ alarmTable
+	DEX
+.alarmTable
+	TXA						\\ 1 - 48, even = alarm
 ENDIF
-	CMP #3					\\ 3: set time zone-- UTC, GMT, BST
-	BNE notSetBSTZone
-	JSR RTC_setBSTZone
-	JMP doneOSWORD0f
-.notSetBSTZone
-	CMP #6					\\ 6: set time zone-- UTC+hh or UTC-hh
-	BNE notSetTimeZone
-	JSR RTC_setTimeZone
-	JMP doneOSWORD0f
-.notSetTimeZone
-IF INC_SECONDS
-	CMP #7					\\ 7: increment seconds-- S+ss.cc or S-ss.cc
-	BNE notIncSeconds
-	JSR RTC_incSeconds
-	JMP doneOSWORD0f
-.notIncSeconds
-ENDIF
-	CMP #8					\\ 8: set time-- hh:mm:ss
-	BNE notSetTimeOnly
-	JSR RTC_setTimeOnly
-	JMP doneOSWORD0f
-.notSetTimeOnly
-	CMP #15					\\ 15: set date-- www,dd mmm yyyy
-	BNE notSetDateOnly
-	JSR RTC_setDateOnly
-	JMP doneOSWORD0f
-.notSetDateOnly
-	CMP #24					\\ 24: set date & time-- www,dd mmm yyyy.hh:mm:ss
-	BNE notSetDateTime
-	JSR RTC_setDateTime
+	ASL A
+	TAX	
+	JSR OSW_JMPtable
 .doneOSWORD0f
-	BCC notSetDateTime		\\ error in time string
+	BCC OSW_unused			\\ error in time string
 	LDA #0
 	RTS
-.notSetDateTime
+.OSW_unused
 	LDA #8
 	RTS
+.OSW_JMPtable
+	LDA OSWORDJMPtable-1,X	\\ address high
+	PHA
+	LDA OSWORDJMPtable-2,X	\\ address low
+	PHA
+	RTS
+
+.OSW_oneChar
+	LDA (OSWORDPtr),Y
+	AND #LO(NOT(&20))		\\ ignore capitalisation
+	CMP #'S'
+	BNE OSW_unused
+	JSR RTC_Synchronise
+	JMP doneOSWORD0f
+
+IF SAVE_ALARMS
+.OSW_fifteen
+	TYA
+	PHA
+	CLC
+	ADC #6					\\ Ann=dd.
+	TAY
+	LDA (OSWORDPtr),Y
+	CMP #'.'
+	BNE notSetAlarmMonthly
+	PLA
+	TAY
+	JSR RTC_setAlarmMonthly
+	JMP doneOSWORD0f
+.notSetAlarmMonthly
+	PLA
+	TAY
+	JSR RTC_setAlarmYearlyOrdNT
+	JMP doneOSWORD0f
+ENDIF
 
 
 
 INCLUDE "VIA.6502"
 INCLUDE "Clock.6502"
 INCLUDE "TimeStrings.6502"
+IF SAVE_ALARMS OR SAVE_SETTIME
+	INCLUDE "SaveTimes.6502"
+ENDIF
 
-	
+
+.OSWORDJMPtable
+IF CALIBRATION = 0
+	RTC_tuneClock = OSW_unused
+ENDIF
+IF SAVE_ALARMS
+	EQUW OSW_oneChar-1, OSW_unused-1, OSW_unused-1, OSW_unused-1, RTC_setBSTZone-1, OSW_unused-1, RTC_tuneClock-1, RTC_clearAlarm-1
+	EQUW OSW_unused-1, OSW_unused-1, RTC_setTimeZone-1, RTC_setAlarmMonthlyNT-1, RTC_incSeconds-1, RTC_setAlarmWeeklyNT-1, RTC_setTimeOnly-1, OSW_unused-1
+	EQUW OSW_unused-1, RTC_setAlarmHourly-1, OSW_unused-1, RTC_setAlarmYearlyNT-1, OSW_unused-1, RTC_setAlarmMonthlyOrdNT-1, OSW_unused-1, RTC_setAlarmDaily-1
+	EQUW OSW_unused-1, OSW_unused-1, OSW_unused-1, OSW_unused-1, RTC_setDateOnly-1, OSW_fifteen-1, OSW_unused-1, RTC_setAlarmWeekly-1
+	EQUW OSW_unused-1, OSW_unused-1, OSW_unused-1, OSW_unused-1, OSW_unused-1, RTC_setAlarmYearly-1, OSW_unused-1, RTC_setAlarmMonthlyOrd-1
+	EQUW OSW_unused-1, OSW_unused-1, OSW_unused-1, OSW_unused-1, OSW_unused-1, OSW_unused-1, RTC_setDateTime-1, RTC_setAlarmYearlyOrd-1
+ELSE
+	EQUW OSW_oneChar-1, OSW_unused-1, RTC_setBSTZone-1, RTC_tuneClock-1
+	EQUW OSW_unused-1, RTC_setTimeZone-1, RTC_incSeconds-1, RTC_setTimeOnly-1
+	EQUW OSW_unused-1, OSW_unused-1, OSW_unused-1, OSW_unused-1
+	EQUW OSW_unused-1, OSW_unused-1, RTC_setDateOnly-1, OSW_unused-1
+	EQUW OSW_unused-1, OSW_unused-1,OSW_unused-1, OSW_unused-1
+	EQUW OSW_unused-1, OSW_unused-1,OSW_unused-1, RTC_setDateTime-1
+ENDIF
+
+
 
 .codeEnd
 

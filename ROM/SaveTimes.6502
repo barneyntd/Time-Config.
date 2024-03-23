@@ -1,0 +1,205 @@
+\*******************************************************\
+\														\
+\				Read & write saved time					\
+\														\
+\*******************************************************\
+
+.RTC_readSavedTime
+	BPL readAlarmBCD
+	LDX #NVR_SetTime
+	LDY #8
+	JMP FRAM_readBytes		\\ read seconds .. century
+.readAlarmBCD				\\ Read date & time from NVRAM to TempSpace; A = alarm no
+IF SAVE_ALARMS
+	CMP #40
+	BCS noRead
+	ASL A
+	STA TempSpace
+	ASL A
+	ADC TempSpace			\\ multiply by six (C is clear)
+	TAX
+	LDY #6
+	JSR FRAM_readBytes		\\ read seconds .. months
+	LDA #&FF
+	STA TempYear			\\ year & century not saved
+	STA TempCentury
+.noRead
+ENDIF
+	RTS
+
+IF SAVE_SETTIME
+.RTC_saveSetTime
+	LDX #NVR_HourOffset
+	SEC
+	JSR FRAM_readByte		\\ look up timezone
+	STY TempSpace2
+	SED
+	LDA #0
+	SEC
+	SBC TempSpace2
+	JSR RTC_addHours		\\ subtract timezone from time
+	CLD
+	LDX #NVR_SetTime
+	LDY #8
+	SEC
+	JMP FRAM_writeBytes
+ENDIF
+
+\*******************************************************\
+\														\
+\				Write saved alarms						\
+\														\
+\*******************************************************\
+
+IF SAVE_ALARMS
+.clearTime
+	LDA #&FF
+	STA TempSecond			\\ mark as unset
+	STA TempMinute
+	STA TempHour			\\ hour is wild
+	RTS
+
+.RTC_setAlarmHourly			\\ set hourly alarm-- Ann=mm:ss
+	JSR RTC_ParseANumber	\\ parse Ann=
+	BCC noSetAlarm
+	PHA
+	JSR RTC_ParseMinute		\\ parse hh:mm:ss
+	BCC noSetAlarmP
+	LDA #&FF
+	STA TempHour			\\ hour is wild
+	BNE clearWkday			\\ always	
+
+.RTC_setAlarmDaily			\\ set daily alarm-- Ann=hh:mm:ss
+	JSR RTC_ParseANumber	\\ parse Ann=
+	BCC noSetAlarm
+	PHA
+	JSR RTC_ParseTime		\\ parse hh:mm:ss
+	BCC noSetAlarmP
+	LDA #&FF
+	BNE clearWkday			\\ always
+
+.RTC_setAlarmWeekly			\\ set weekly alarm-- Ann=www.hh:mm:ss
+	JSR RTC_ParseANumber	\\ parse Ann=
+	BCC noSetAlarm
+	PHA
+	JSR RTC_ParseAlarmWeekly	\\ parse www.hh:mm:ss
+	BCC noSetAlarmP
+	LDA #&FF
+	BNE clearDay			\\ always
+
+.RTC_setAlarmMonthly		\\ set monthly alarm-- Ann=dd.hh:mm:ss
+	JSR RTC_ParseANumber	\\ parse Ann=
+	BCC noSetAlarm
+	PHA
+	JSR RTC_ParseAlarmMonthly	\\ parse dd.hh:mm:ss
+	BCC noSetAlarmP
+	LDA #&FF
+	STA TempWkday			\\ weekday is wild
+	BNE clearMonth			\\ always
+
+.RTC_setAlarmMonthlyOrd		\\ set monthly alarm-- Ann=ooo www.hh:mm:ss
+	JSR RTC_ParseANumber	\\ parse Ann=
+	BCC noSetAlarm
+	PHA
+	JSR RTC_ParseAlarmMonthlyOrd	\\ parse ooo www.hh:mm:ss
+	BCC noSetAlarmP
+	LDA #&FF
+	BNE clearDay			\\ always
+
+.RTC_setAlarmYearly			\\ set yearly alarm-- Ann=dd mmm.hh:mm:ss
+	JSR RTC_ParseANumber	\\ parse Ann=
+	BCC noSetAlarm	
+	PHA
+	JSR RTC_ParseAlarmYearly	\\ parse dd mmm.hh:mm:ss
+	BCC noSetAlarmP
+	LDA #&FF
+	STA TempWkday			\\ weekday is wild
+	BNE saveAlarm			\\ always
+
+.RTC_setAlarmYearlyOrd		\\ set yearly alarm-- Ann=ooo www mmm.hh:mm:ss
+	JSR RTC_ParseANumber	\\ parse Ann=
+	BCC noSetAlarm	
+	PHA
+	JSR RTC_ParseAlarmYearlyOrd	\\ parse ooo www mmm.hh:mm:ss
+	BCC noSetAlarmP
+	LDA #&FF
+	STA TempDay				\\ day is wild
+	BNE saveAlarm			\\ always
+
+.noSetAlarmP
+	PLA
+.noSetAlarm
+	RTS
+
+.RTC_clearAlarm
+	JSR RTC_ParseANumber	\\ parse Ann=
+	BCC noSetAlarm
+	PHA
+	JSR clearTime
+.clearWkday
+	STA TempWkday			\\ weekday is wild
+.clearDay
+	STA TempDay				\\ day is wild
+.clearMonth
+	STA TempMonth			\\ month is wild
+.saveAlarm
+	PLA
+	ASL A
+	STA TempSpace2
+	ASL A
+	ADC TempSpace2			\\ multiply by six (C is clear)
+	TAX
+	LDY #6
+	JSR FRAM_writeBytes		\\ write seconds .. months; years not saved
+	SEC
+	RTS
+
+.RTC_setAlarmWeeklyNT			\\ set weekly alarm-- Ann=www
+	JSR RTC_ParseANumber	\\ parse Ann=
+	BCC noSetAlarm
+	PHA
+	JSR RTC_ParseAlarmWeeklyNT	\\ parse www
+	BCC noSetAlarmP
+	JSR clearTime
+	BNE clearDay			\\ always
+
+.RTC_setAlarmMonthlyNT		\\ set monthly alarm-- Ann=dd
+	JSR RTC_ParseANumber	\\ parse Ann=
+	BCC noSetAlarm
+	PHA
+	JSR RTC_ParseAlarmMonthlyNT	\\ parse dd
+	BCC noSetAlarmP
+	JSR clearTime
+	STA TempWkday			\\ weekday is wild
+	BNE clearMonth			\\ always
+
+.RTC_setAlarmMonthlyOrdNT		\\ set monthly alarm-- Ann=ooo www
+	JSR RTC_ParseANumber	\\ parse Ann=
+	BCC noSetAlarm
+	PHA
+	JSR RTC_ParseAlarmMonthlyOrdNT	\\ parse ooo www
+	BCC noSetAlarmP
+	JSR clearTime
+	BNE clearDay			\\ always
+
+.RTC_setAlarmYearlyNT			\\ set yearly alarm-- Ann=dd mmm
+	JSR RTC_ParseANumber	\\ parse Ann=
+	BCC noSetAlarm
+	PHA
+	JSR RTC_ParseAlarmYearlyNT	\\ parse dd mmm
+	BCC noSetAlarmP
+	JSR clearTime
+	STA TempWkday			\\ weekday is wild
+	BNE saveAlarm			\\ always
+
+.RTC_setAlarmYearlyOrdNT		\\ set yearly alarm-- Ann=ooo www mmm
+	JSR RTC_ParseANumber	\\ parse Ann=
+	BCC noSetAlarm
+	PHA
+	JSR RTC_ParseAlarmYearlyOrdNT	\\ parse ooo www mmm
+	BCC noSetAlarmP
+	JSR clearTime
+	STA TempDay				\\ day is wild
+	BNE saveAlarm			\\ always
+ENDIF
+
