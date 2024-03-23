@@ -1,0 +1,469 @@
+\ NVRAM locations (upper page)
+NVR_Century		= &FF
+NVR_Flags		= &FE
+NVR_Flags_8099	= %10000000			\\ Year is '80 - '99
+NVR_Flags_FLY	= %01000000			\\ False leap year, not yet corrected
+NVR_HourOffset	= &FD				\\ Offset from UTC for timezone & summertime
+NVR_MinuteOffset= &FC				\\ Not currently implemented
+
+\*******************************************************\
+\														\
+\				Time format								\
+\														\
+\*******************************************************\
+
+TempSecond			= TempSpace			\\ seconds, 00 - 59 BCD
+TempMinute			= TempSpace+1		\\ minutes, 00 - 59 BCD
+TempHour			= TempSpace+2		\\ hours, 00 - 23 BCD
+TempDay				= TempSpace+3		\\ day of month, 01 - 31 BCD
+TempWkday			= TempSpace+4		\\ Sunday = 0 - Saturday = 6
+TempMonth			= TempSpace+5		\\ months, 01 - 12 BCD
+TempYear			= TempSpace+6		\\ year, 00 - 99 BCD
+TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
+
+
+
+\*******************************************************\
+\														\
+\				Read RTC registers						\
+\														\
+\*******************************************************\
+
+
+.RTC_readTime				\\ Read date & time from RTC & correct using flags
+	LDA #RTC_TD_sec			\\ seconds register
+	LDX #7					\\ seconds, minutes, hours, days, weekdays, months, years
+	JSR RTC_readBytes
+	LDX #NVR_Century
+	SEC
+	JSR FRAM_readByte		\\ look up century
+	STY TempCentury
+	LDX #NVR_Flags
+	SEC
+	JSR FRAM_readByte		\\ look up flags; result in Y
+	LDA TempYear			\\ year
+	BMI year8099			\\ year is 80-99
+	TYA
+	BPL noCenturyInc		\\ NVR_Flags_8099 not set
+	PHA						\\ save flags
+	LDA TempCentury			\\ century
+	SED
+	CLC
+	ADC #1					\\ add one in BCD mode
+	CLD
+	STA TempCentury
+	TAY
+	LDX #NVR_Century
+	SEC
+	JSR FRAM_writeByte		\\ save century in NVRAM
+	PLA						\\ flags
+	AND #LO(NOT(NVR_Flags_8099))	\\ clear 80-99 flag
+	TAY
+.noCenturyInc
+	AND #NVR_Flags_FLY		\\ check false leap year
+	BEQ noDayInc
+	LDA TempYear			\\ year
+	BNE dayInc				\\ year after '00
+	LDA #2					\\ Feb
+	CMP TempMonth			\\ month
+	BCC dayInc				\\ month after feb
+	BNE noDayInc			\\ month before feb
+	LDA TempDay				\\ day
+	CMP #&29
+	BCC noDayInc			\\ day before 29th
+	DEC TempDay				\\ avoid double increment
+.dayInc
+	TYA
+	PHA						\\ save flags
+	LDA #&01
+	SED
+	JSR RTC_addMonthDays	\\ increment day to fix unneeded leap year
+	CLD
+	LDA #RTC_TD_sec
+	LDY #0					\\ start from TempSpace
+	LDX #7					\\ seconds, minutes, hours, day, weekday, month, year
+	JSR RTC_sendBytes		\\ save new date
+	PLA						\\ flags
+.clearFLYandSave
+	AND #LO(NOT(NVR_Flags_FLY))	\\ clear FLY flag
+.saveFlags
+	TAY
+.noDayInc
+	LDX #NVR_Flags
+	SEC
+	JMP FRAM_writeByte		\\ save flags in NVRAM and return
+.year8099
+	TYA						\\ flags
+	BPL checkCentury		\\ NVR_Flags_8099 clear
+	RTS
+.checkCentury
+	LDA TempCentury			\\ century
+	AND #&13
+	CMP #&03				\\ ends in 03 or 07
+	BEQ nextDiv4			\\ next century is leap year
+	CMP #&11				\\ ends in 11, 15 or 19
+	BEQ nextDiv4			\\ next century is leap year
+	TYA						\\ flags
+	ORA #NVR_Flags_8099 OR NVR_Flags_FLY	\\ set both flags
+	BNE saveFlags			\\ save flags in NVRAM and return
+.nextDiv4
+	TYA						\\ flags
+	ORA #NVR_Flags_8099		\\ set 80-99 flag
+	BNE clearFLYandSave		\\ clear FLY flag, save flags in NVRAM and return
+
+
+
+
+\*******************************************************\
+\														\
+\				Write RTC registers						\
+\														\
+\*******************************************************\
+
+.RTC_setTimeOnly			\\ set time from string in format hh:mm:ss in (OSWORDPtr),Y
+	JSR RTC_ParseTime
+	BCC badString			\\ no match
+	LDA #RTC_TD_sec
+	LDY #0					\\ start from TempSpace
+	LDX #3					\\ seconds, minutes, hours
+	SEC						\\ no error
+	JMP RTC_sendBytes		\\ flags are saved
+.badString
+	RTS						\\ carry is clear
+	
+.RTC_setDateOnly			\\ set date from string in format www,dd mmm yyyy in (OSWORDPtr),Y
+	JSR RTC_ParseDate
+	BCC badString
+	LDA #RTC_TD_day
+	LDY #3					\\ start from TempSpace+3
+	LDX #4					\\ day, weekday, month, year
+	JSR RTC_sendBytes
+	JMP RTC_setCentury
+
+.RTC_setDateTime			\\ set date & time from string in format www,dd mmm yyyy.hh:mm:ss in (OSWORDPtr),Y
+	JSR RTC_ParseDate
+	BCC badString
+	LDA #'.'
+	CMP (OSWORDPtr),Y		\\ check for '.'
+	BNE badString
+	INY						\\ skip '.'
+	JSR RTC_ParseTime
+	BCC badString			\\ no match
+	LDA #RTC_TD_sec
+	LDY #0					\\ start from TempSpace
+	LDX #7					\\ seconds, minutes, hours, day, weekday, month, year
+	JSR RTC_sendBytes
+
+.RTC_setCentury				\\ set century from contents of TempSpace+7 & flags from date in TempSpace
+	LDY TempCentury			\\ Century
+	LDX #NVR_Century		\\ address to store it
+	SEC
+	JSR FRAM_writeByte		\\ save century
+
+.RTC_setFlags				\\ set flags according to date in TempSpace
+	LDX #NVR_Flags
+	SEC
+	JSR FRAM_readByte		\\ look up flags; result in Y
+	LDA TempYear			\\ year
+	BPL year0079			\\ year is 00-79
+	JMP checkCentury
+.year0079
+	LDA TempCentury			\\ century
+	AND #&13
+	BEQ notFLY				\\ century ending 00 04 or 08
+	CMP #&12
+	BEQ notFLY				\\ century ending 12 or 16
+	LDA TempYear			\\ year
+	BNE notFLY				\\ year after '00
+	LDA TempMonth
+	CMP #3					\\ March
+	BCS notFLY				\\ month after feb
+	TYA
+	ORA #NVR_Flags_FLY		\\ set false leap year flag
+	AND #LO(NOT(NVR_Flags_8099))	\\ clear 80-79 flag
+	JMP saveFlags			\\ save flags and return
+.notFLY
+	TYA
+	AND #LO(NOT(NVR_Flags_8099 OR NVR_Flags_FLY))	\\ clear both flags
+	JMP saveFlags			\\ save flags and return
+
+
+\*******************************************************\
+\														\
+\				Update RTC registers					\
+\														\
+\*******************************************************\
+
+.RTC_setTimeZone			\\ adjust time depending on string UTC+hh or UTC-hh
+	JSR RTC_ParseTimeZone
+	JMP doSetBSTZone
+	
+.RTC_setBSTZone				\\ adjust time depending on TLA in (OSWORDPtr),Y
+	JSR RTC_ParseBST		\\ parse new offset
+.doSetBSTZone
+	BCC noChange			\\ not recognised
+	PHA						\\ save temporarily
+	LDX #NVR_HourOffset
+	SEC
+	JSR FRAM_readByte		\\ look up old offset
+	STY TempSpace2			\\ save for subtraction
+	PLA						\\ new offset
+	TAY
+	SED						\\ BCD mode on
+	SEC
+	SBC TempSpace2			\\ - old offset
+	CLD
+	BEQ noChange			\\ nothing to do; C is still set
+	PHA						\\ save the difference
+	LDX #NVR_HourOffset
+	SEC
+	JSR FRAM_writeByte		\\ save new offset
+	JSR RTC_readTime		\\ read date & time into TempSpace
+	PLA						\\ time difference
+	SED
+	JSR RTC_addHours		\\ calculate new time
+	CLD
+	LDA #RTC_TD_sec			\\ seconds register
+	LDX #7					\\ seconds, minutes, hours, days, weekdays, months, years
+	LDY #0
+	JSR RTC_sendBytes		\\ save updated date & time from TempSpace
+	JMP RTC_setCentury		\\ save century and flags
+.noChange
+	RTS
+	
+IF INC_SECONDS
+.RTC_incSeconds				\\ adjust time depending on string S+ss.cc or S-ss.cc
+	JSR RTC_ParseInc
+	BCC noChange			\\ not recognised
+	SED
+	LDA #&50
+	SBC TempSpace2			\\ calculate 50-cc; C is set
+	STA TempSpace2
+	ROL A					\\ put C in bit 0
+	EOR #1					\\ flip it
+	ROR A					\\ put it back
+	LDA TempSpace2+1
+	ADC #0					\\ add C
+	STA TempSpace2+1		\\ calculate ss - (50 - cc)DIV100
+	CLD
+	LDA TempSpace2			\\ (50 - cc)MOD100
+	TAY
+	AND #&0F				\\ low digit
+	STA TempSpace2
+	TYA
+	AND #&F0				\\ high digit * 16
+	LSR A					\\ high digit * 8
+	TAY
+	ADC TempSpace2			\\ C is clear from shift
+	STA TempSpace2			\\ low digit + high digit * 8
+	TYA
+	LSR A
+	LSR A					\\ high digit * 2
+	ADC TempSpace2			\\ C is clear from shift
+	STA TempSpace2			\\ low digit + high digit * 10
+	PHA						\\ TempSpace2 is not preserved by readTime or addSeconds
+	JSR RTC_Synchronise
+	LDX TempSpace2
+	JSR RTC_setupDelay
+	JSR RTC_readTime
+	LDA TempSpace2+1		\\ ss - (50 - cc)DIV100
+	SED
+	JSR RTC_addSeconds		
+	CLD
+	PLA						\\ delay time
+	BEQ noDelay2
+	JSR RTC_delay
+.noDelay2
+	JSR RTC_stopClock		\\ clear clock dividers
+	LDA #RTC_TD_sec
+	LDY #0					\\ start from TempSpace
+	LDX #7					\\ seconds, minutes, hours, day, weekday, month, year
+	JSR RTC_sendBytes		\\ set new time
+	JSR RTC_startClock		\\ restart clock
+	SEC
+	RTS
+ENDIF
+
+\*******************************************************\
+\														\
+\				Date Arithmetic							\
+\														\
+\*******************************************************\
+
+IF INC_SECONDS
+.RTC_addSeconds				\\ add accumulator seconds to time in RTC format. -20 <= A <= 20. Assumes D set
+	CLC
+	ADC TempSecond			\\ Seconds
+	CMP #&80				\\ treat anything above 79 as negative
+	BCS negSeconds
+	CMP #&60
+	BCS overSeconds
+	STA TempSecond
+	RTS
+.negSeconds
+	ADC #&59				\\ C is set
+	STA TempSecond
+	LDA #&99				\\ carry -1
+	BNE RTC_addMinutes
+.overSeconds
+	SBC #&60				\\ C is set
+	STA TempSecond
+	LDA #&1					\\ carry +1
+.RTC_addMinutes				\\ add accumulator minutes to time in RTC format. -20 <= A <= 20. Assumes D set
+	CLC
+	ADC TempMinute			\\ Minutes
+	CMP #&80				\\ treat anything above 79 as negative
+	BCS negMinutes
+	CMP #&60
+	BCS overMinutes
+	STA TempMinute
+	RTS
+.negMinutes
+	ADC #&59				\\ C is set
+	STA TempMinute
+	LDA #&99				\\ carry -1
+	BNE RTC_addHours
+.overMinutes
+	SBC #&60				\\ C is set
+	STA TempMinute
+	LDA #&1					\\ carry +1
+ENDIF
+
+.RTC_addHours				\\ add accumulator hours to time in RTC format. -38<=A<=38. Assumes D set
+	CLC
+	ADC TempHour			\\ Hours
+	CMP #&62				\\ treat anything above 61 as negative
+	BCS negHours
+	LDX #&0					\\ carry
+	SEC
+.carryLoop1
+	STA TempHour
+	SBC #&24				\\ C is still set
+	BCC notOverHours
+	INX						\\ carry +1
+	BNE carryLoop1
+.negHours
+	LDX #&9A				\\ carry = -0
+	CLC
+.carryLoop2
+	DEX						\\ carry -1
+	ADC #&24				\\ C is clear
+	BCC carryLoop2
+	STA TempHour
+.notOverHours
+	TXA
+	BNE RTC_addDays
+	RTS
+.RTC_addDays				\\ add accumulator days to time in RTC format. -20<=A<=20 Assumes D set
+	PHA						\\ save increment for month day
+	CLC
+	ADC TempWkday			\\ weekday (0-6)
+	CMP #&66				\\ treat anything above 65 as negative
+	BCS negWeekDays
+.wkDayLoop1
+	CMP #&7
+	BCC wkDayDone
+	SBC #&7					\\ C is set
+	BCS wkDayLoop1			\\ always true
+.negWeekDays
+	CLC
+.wkDayLoop2
+	ADC #&7					\\ C is still clear
+	BCC wkDayLoop2
+.wkDayDone
+	STA TempWkday
+	PLA						\\ restore increment for month day
+.RTC_addMonthDays			\\ add accumulator days to time in RTC format without changing weekday. -20<=A<=20 Assumes D set
+	CLC
+	ADC TempDay				\\ Days
+	STA TempDay				\\ new day
+	AND #&FF				\\ set flags
+	BEQ negDays				\\ treat zero as negative
+	BPL posDays
+.negDays
+	LDA TempMonth			\\ month
+	SEC
+	SBC #&1					\\ last month
+	TAY						\\ sets flags
+	BNE lastMonthOK
+	LDY #&12
+.lastMonthOK
+	JSR RTC_monthLength		\\ calculate length of last month; year can't change if February
+	CLC
+	ADC TempDay				\\ add negative day to month length
+	STA TempDay	
+	LDA #&99				\\ carry -1
+	BNE RTC_addMonths		\\ always
+.posDays
+	LDY TempMonth			\\ month
+	JSR RTC_monthLength		\\ calculate length of this month
+	CMP TempDay				\\ check if day is over month length
+	BCC overDays			\\ day > month length
+	RTS
+.overDays
+	STA TempSpace2			\\ save month length
+	LDA TempDay				\\ day
+	SEC
+	SBC TempSpace2			\\ subtract month length
+	STA TempDay	
+	LDA #1					\\ carry +1
+.RTC_addMonths				\\ add accumulator months to time in RTC format. -12<=A<=12 Assumes D set
+	CLC
+	ADC TempMonth			\\ Months
+	AND #&FF				\\ set flags
+	BEQ negMonths			\\ treat zero as negative
+	BMI negMonths
+	CMP #&13
+	BCS overMonths
+	STA TempMonth
+	RTS
+.negMonths
+	CLC
+	ADC #&12
+	STA TempMonth
+	LDA TempYear			\\ years
+	SEC
+	SBC #&1
+	STA TempYear
+	LDA TempCentury			\\ centuries
+	SBC #&0					\\ C from years
+	STA TempCentury
+	RTS
+.overMonths
+	SBC #&12				\\ C is set
+	STA TempMonth
+	LDA #&1					\\ carry +1
+.RTC_addYears				\\ add accumulator years to time in RTC format. 0 <= A <= 99. Assumes D set
+	CLC
+	ADC TempYear			\\ Years
+	STA TempYear
+	LDA TempCentury			\\ centuries
+	ADC #&0					\\ C from years
+	STA TempCentury
+	RTS
+
+.RTC_MonthLengths
+	EQUB &31,&28,&31,&30,&31,&30,&31,&31,&30,0,0,0,0,0,0,&31,&30,&31
+
+.RTC_monthLength			\\ calculate length of month in Y, from year in RTC format
+	CPY #&2					\\ February
+	BEQ leapCheck
+	LDA RTC_MonthLengths-1,Y	\\ look up in table
+	RTS
+.leapCheck
+	LDA TempYear			\\ year
+	BNE leapCheck2
+	LDA TempCentury			\\ century
+.leapCheck2
+	AND #&13
+	BEQ leapYear
+	CMP #&12
+	BEQ leapYear
+.notLeapYear
+	LDA #&28				\\ February, not a leap year
+	RTS
+.leapYear
+	LDA #&29				\\ February, leap year
+	RTS
+
+	

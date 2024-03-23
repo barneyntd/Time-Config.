@@ -1,0 +1,487 @@
+\*******************************************************\
+\														\
+\				Time strings							\
+\														\
+\*******************************************************\
+
+.RTC_MonthsString
+	EQUS "JanFebMarAprMayJunJulAugSepOctNovDec"
+MonthsCount	= 11
+.RTC_DaysString
+	EQUS "SunMonTueWedThuFriSat"
+DaysCount = 6
+.RTC_BSTString
+	EQUS "UTCGMTBST"
+BSTCount = 2
+.RTC_BSTOffset
+	EQUB &0,&0,&1
+\.RTC_TZString
+\	EQUS "UTCGMTBSTASTADTESTEDTCSTCDTMSTMDTPSTPDTWETCETEET"
+\TZCount = 15
+\.RTC_TZOffset
+\	EQUB &0,&0,&1,&96,&97,&95,&96,&94,&95,&93,&94,&92,&93,&0,&1,&2				\\ time zone offsets, matching strings in RTC_TZString
+
+\*******************************************************\
+\														\
+\				Convert time to text					\
+\														\
+\*******************************************************\
+
+.RTC_OutputText				\\ Save a character to (OSWORDPtr)+Y, or send it to OSWRCH
+	PHA
+	LDA OSWORDPtr+1			\\ check output buffer
+	BEQ printit				\\ if zero, print instead
+	PLA
+	STA (OSWORDPtr),Y
+	INY
+	RTS
+.printit
+	PLA
+	INY
+	JMP OSWRCH
+
+.RTC_BCDtoText				\\ Convert BCD byte to two ascii characters, or ?? if N set
+							\\ A=BCD number, (OSWORDPtr)+Y write address, Y+=2
+	BMI unsetBCD
+	PHA
+	LSR A
+	LSR A
+	LSR A
+	LSR A
+	JSR BCDdigit
+	PLA
+	AND #&0F
+.BCDdigit		  			\\ Convert digit to ascii & inc Y; A=digit, (OSWORDPtr)+Y result
+	CLC
+	ADC #'0'
+	JMP RTC_OutputText
+.unsetBCD
+	LDA #'?'
+	JSR RTC_OutputText
+	JMP RTC_OutputText
+
+.RTC_readTimeString			\\ Read date & time from RTC & convert to string
+	JSR RTC_readTime
+
+.RTC_TimetoText				\\ convert time in TempSpace to string in (OSWORDPtr),Y or OSWRCH
+	LDY #0
+	LDA TempSecond			\\ if seconds are invalid, everything is
+	BPL timeOK
+	LDA #&FF
+	LDX #7
+.copyloop2
+	STA TempSpace,X
+	DEX
+	BPL copyloop2
+.timeOK
+	LDA TempWkday			\\ weekday
+	BMI weekdayUnset		
+	ASL A
+	ADC TempWkday			\\ multiply by 3
+	TAX
+.weekdayLoop
+	LDA RTC_DaysString,X
+	JSR RTC_OutputText
+	INX
+	CPY #3
+	BNE weekdayLoop
+	BEQ wkdayOK
+.weekdayUnset
+	LDA #'?'
+	JSR RTC_OutputText
+	JSR RTC_OutputText
+	JSR RTC_OutputText
+.wkdayOK
+	LDA #','
+	JSR RTC_OutputText
+	LDA TempDay				\\ day
+	JSR RTC_BCDtoText
+	LDA #' '
+	JSR RTC_OutputText
+	LDA TempMonth			\\ month
+	BMI monthUnset
+	CMP #10
+	BCC monthBin
+	SBC #6					\\ convert from BCD
+.monthBin
+	STA TempSpace2
+	ASL A
+	ADC TempSpace2			\\ multiply by 3
+	TAX
+.monthLoop
+	LDA RTC_MonthsString-3,X
+	JSR RTC_OutputText
+	INX
+	CPY #10
+	BNE monthLoop
+	BEQ monthOK
+.monthUnset
+	LDA #'?'
+	JSR RTC_OutputText
+	JSR RTC_OutputText
+	JSR RTC_OutputText
+.monthOK
+	LDA #' '
+	JSR RTC_OutputText
+	LDA TempCentury			\\ century
+	BPL centuryOK			\\ 00 - 79
+	CMP #&99-&7F			\\ anything greater than &99 sets N
+.centuryOK
+	JSR RTC_BCDtoText
+	LDA TempYear			\\ year
+	BPL yearOK				\\ 00 - 79
+	CMP #&99-&7F			\\ anything greater than &99 sets N
+.yearOK
+	JSR RTC_BCDtoText
+	LDA #'.'
+	JSR RTC_OutputText
+	LDA TempHour			\\ hour
+	JSR RTC_BCDtoText
+	LDA #':'
+	JSR RTC_OutputText
+	LDA TempMinute			\\ minute
+	JSR RTC_BCDtoText
+	LDA #':'
+	JSR RTC_OutputText
+	LDA TempSecond			\\ second
+	JMP RTC_BCDtoText
+
+\*******************************************************\
+\														\
+\				Convert to/from Acorn BCD				\
+\														\
+\*******************************************************\
+
+.RTC_readTimeBCD			\\ Read date & time from RTC & convert to Acorn BCD format
+	JSR RTC_readTime
+
+.RTC_TimeToABCD				\\ Convert RTC time to Acorn format BCD time
+							\\ OSWORDPtr=buffer address for result, buffer size = 7
+	LDY #6
+	LDA TempSecond			\\ seconds
+	BMI errorTimeBCD		\\ clock integrity failed
+	STA (OSWORDPtr),Y
+	DEY						\\ #5
+	LDA TempMinute			\\ minutes
+	STA (OSWORDPtr),Y
+	DEY						\\ #4
+	LDA TempHour			\\ hours
+	STA (OSWORDPtr),Y
+	DEY						\\ #3
+	LDX TempWkday			\\ weekdays
+	INX						\\ fix different day representation
+	TXA
+	STA (OSWORDPtr),Y
+	DEY						\\ #2
+	LDA TempDay				\\ days
+	STA (OSWORDPtr),Y
+	DEY						\\ #1
+	LDA TempMonth			\\ months
+	STA (OSWORDPtr),Y
+	DEY						\\ #0
+	LDA TempYear			\\ years
+	STA (OSWORDPtr),Y
+	RTS
+.errorTimeBCD				\\ time unreliable, so return &FFFFFFFFFFFFFF
+	LDA #&FF
+.timeErrLoop
+	STA (OSWORDPtr),Y
+	DEY
+	BPL timeErrLoop
+	RTS
+
+.RTC_ABCDtoTime				\\ Convert Acorn format BCD time to RTC time
+							\\ OSWORDPtr=buffer address for data, buffer size = 7
+	LDY #6
+.RTC_ABCDtoTime2
+	LDA (OSWORDPtr),Y
+	STA TempSecond			\\ seconds
+	DEY						\\ #5
+	LDA (OSWORDPtr),Y
+	STA TempMinute			\\ minutes
+	DEY						\\ #4
+	LDA (OSWORDPtr),Y
+	STA TempHour			\\ hours
+	DEY						\\ #3
+	LDA (OSWORDPtr),Y
+	TAX
+	DEX						\\ fix different day representation
+	STX TempWkday			\\ weekdays
+	DEY						\\ #2
+	LDA (OSWORDPtr),Y
+	STA TempDay				\\ days
+	DEY						\\ #1
+	LDA (OSWORDPtr),Y
+	STA TempMonth			\\ months
+	DEY						\\ #0
+	LDA (OSWORDPtr),Y
+	STA TempYear			\\ years
+	BMI century19			\\ assume year '80 - '99 is century 19
+	LDA #&20				\\ assume year '00 - '79 is century 20
+	BNE storeCentury
+.century19
+	LDA #&19
+.storeCentury
+	STA TempCentury
+	RTS
+
+.RTC_ConvertTimeString		\\ Convert Acorn format BCD to string
+							\\ OSWORDPtr=buffer address for data and result, buffer size = 8
+	LDY #7					\\ the data is one byte shifted
+	JSR RTC_ABCDtoTime2		\\ convert to RTC time
+	JMP RTC_TimetoText		\\ and print to string
+
+
+\*******************************************************\
+\														\
+\				Parse time string						\
+\														\
+\*******************************************************\
+
+.RTC_ASCdigit				\\ Convert ascii digit in (OSWORDPtr),Y to BCD & inc Y; returns &FF & N set if not '0'-'9'
+	LDA (OSWORDPtr),Y
+	INY
+	CMP #'9'+1				\\ error if greater than '9'
+	BCS badDigit
+	SBC #'0'-1				\\ carry is clear, so -1
+	BCS goodDigit			\\ error if less than '0'
+.badDigit
+	LDA #&FF				\\ error
+.goodDigit
+	RTS
+	
+.RTC_textToBCD		 		\\ convert 2 ascii digits in (OSWORDPtr),Y to BCD & Y+=2; returns &FF & C clear if not number,
+	JSR RTC_ASCdigit		\\ calculate tens digit
+	BMI noMatch				\\ if error, return
+	ASL A
+	ASL A
+	ASL A
+	ASL A
+	STA TextPointer			\\ save tens value
+	JSR RTC_ASCdigit		\\ calculate units
+	BMI noMatch				\\ if error, return
+	ORA TextPointer			\\ add tens
+	RTS
+
+	
+.RTC_matchWord				\\ look up 3 character word in (OSWORDPtr),Y in list & Y+=3; return index (from 0) or &FF in X & N set
+							\\ last list element in (TextPointer),Y, no of elements - 1 in X
+	STX TempSpace
+	STY TempSpace+1
+.wordLoop
+	LDX #3					\\ 3 characters per word
+.letterLoop
+	LDA (OSWORDPtr),Y		\\ next letter
+	EOR (TextPointer),Y		\\ compare with list
+	AND #LO(NOT(&20))		\\ ignore capitalisation
+	BNE notThisWord			\\ characters don't match
+	INY						\\ next character
+	DEX
+	BNE letterLoop			\\ repeat
+.noMoreWords
+	LDX TempSpace			\\ word index
+	RTS
+.notThisWord
+	DEC TempSpace
+	BMI noMoreWords			\\ end of list
+	LDY TempSpace+1			\\ restore Y to start of word
+	LDA TextPointer
+	SEC
+	SBC #3					\\ back three characters in list
+	STA TextPointer
+	BCS wordLoop
+	DEC TextPointer+1
+	JMP wordLoop
+
+.RTC_ParseTime				\\ parse string of the form hh:mm:ss in (OSWORDPtr),Y
+							\\ seconds, minutes, hours in TempSpace; C clear for no match
+	JSR RTC_textToBCD
+	BCC noMatch
+	CMP #&24
+	BCS noMatch
+	STA TempHour			\\ hours
+	LDA #':'
+	CMP (OSWORDPtr),Y		\\ check for ':'
+	BNE noMatch
+	INY						\\ skip ':'
+.RTC_ParseMinute
+	JSR RTC_textToBCD
+	BCC noMatch
+	CMP #&60
+	BCS noMatch
+	STA TempMinute			\\ minutes
+	LDA #':'
+	CMP (OSWORDPtr),Y		\\ check for ':'
+	BNE noMatch
+	INY						\\ skip ':'
+	JSR RTC_textToBCD
+	BCC noMatch
+	CMP #&60
+	BCS noMatch
+	STA TempSecond			\\ seconds
+	SEC
+	RTS
+.noMatch
+	CLC
+	RTS
+
+.RTC_ParseWeekday
+	STY TextPointer
+	LDA #LO(RTC_DaysString + DaysCount*3)
+	SEC
+	SBC TextPointer
+	STA TextPointer
+	LDA #HI(RTC_DaysString + DaysCount*3)
+	SBC #0
+	STA TextPointer+1
+	LDX #DaysCount
+	JSR RTC_matchWord		\\ find weekday
+	BMI noMatch
+	STX TempWkday			\\ weekdays; Sun = 0
+	RTS
+
+.RTC_ParseMonth
+	STY TextPointer
+	LDA #LO(RTC_MonthsString + MonthsCount*3)
+	SEC
+	SBC TextPointer
+	STA TextPointer
+	LDA #HI(RTC_MonthsString + MonthsCount*3)
+	SBC #0
+	STA TextPointer+1
+	LDX #MonthsCount
+	JSR RTC_matchWord		\\ find month
+	BMI noMatch
+	INX
+	TXA
+	CMP #10
+	BCC decimalOK2
+	ADC #6-1				\\ C is set, so 6-1 to convert to BCD
+.decimalOK2
+	STA TempMonth
+	RTS
+
+.RTC_ParseDate				\\ parse string of the form www,dd mmm yyyy in (OSWORDPtr),Y,
+							\\ day, weekday, month, year, century in TempSpace+3; C clear for no match
+	JSR RTC_ParseWeekday	\\ find weekday
+	LDA #','
+	CMP (OSWORDPtr),Y		\\ check for ','
+	BNE noMatch
+	INY						\\ skip ','
+	JSR RTC_textToBCD		\\ find day
+	BCC noMatch
+	STA TempDay				\\ days
+	LDA #' '
+	CMP (OSWORDPtr),Y		\\ check for ' '
+	BNE noMatch
+	INY						\\ skip ' '
+	JSR RTC_ParseMonth		\\ find month
+	LDA #' '
+	CMP (OSWORDPtr),Y		\\ check for ' '
+	BNE noMatch
+	INY
+	JSR RTC_textToBCD		\\ read century
+	BCC noMatch
+	STA TempCentury			\\ century
+	JSR RTC_textToBCD		\\ read year
+	BCC noMatch
+	STA TempYear			\\ year
+	TYA
+	PHA
+	LDY TempMonth			\\ month
+	JSR RTC_monthLength
+	CMP TempDay				\\ day of month: C clear if day past end of month
+	PLA
+	TAY
+	RTS
+
+.RTC_ParseBST				\\ parse three letter time zone, result in A
+	STY TextPointer
+	LDA #LO(RTC_BSTString + BSTCount*3)
+	SEC
+	SBC TextPointer
+	STA TextPointer
+	LDA #HI(RTC_BSTString + BSTCount*3)
+	SBC #0
+	STA TextPointer+1
+	LDX #BSTCount
+	JSR RTC_matchWord
+	BMI noMatch2
+	LDA RTC_BSTOffset,X
+	SEC
+	RTS
+
+.RTC_ParseTimeZone			\\ parse string of the form UTC+hh or UTC-hh
+	JSR RTC_ParseBST		\\ parse UTC
+	BCC noMatch2			\\ not recognised
+	BNE noMatch2			\\ not UTC
+	INY						\\ skip + or - sign
+	JSR RTC_textToBCD		\\ read number
+	BCC noMatch2
+	CMP #&20				\\ limit to +-19
+	BCS noMatch2
+	STA TempSpace			\\ save number 
+	DEY
+	DEY
+	DEY						\\ go back to +-sign
+	LDA (OSWORDPtr),Y
+	CMP #'+'
+	BEQ plusMatch
+	CMP #'-'
+	BNE noMatch2
+	LDA #0
+	SED
+	SBC TempSpace			\\ negate number; C is set
+	CLD
+	SEC
+	RTS
+.plusMatch
+	LDA TempSpace			\\ C is set
+	RTS
+
+IF INC_SECONDS
+.RTC_ParseInc				\\ parse string of the form S+ss.cc or S-ss.cc
+	LDA (OSWORDPtr),Y
+	AND #LO(NOT(&20))		\\ ignore capitalisation
+	CMP #'S'
+	BNE noMatch2
+	INY
+	INY						\\ skip + or - sign
+	JSR RTC_textToBCD		\\ read ss
+	BCC noMatch2
+	CMP #&20				\\ limit to +-19
+	BCS noMatch2
+	STA TempSpace2+1
+	LDA (OSWORDPtr),Y		\\ decimal point
+	CMP #'.'
+	BNE noMatch2
+	INY
+	JSR RTC_textToBCD		\\ read cc
+	BCC noMatch2
+	STA TempSpace2
+	TYA
+	SEC
+	SBC #6					\\ go back to sign
+	TAY
+	LDA (OSWORDPtr),Y		\\ + or - sign
+	CMP #'+'
+	BEQ plusMatch2
+	CMP #'-'
+	BNE noMatch2
+	SED
+	SEC
+	LDA #0
+	SBC TempSpace2			\\ negate cc
+	STA TempSpace2
+	LDA #0
+	SBC TempSpace2+1		\\ negate ss, with carry from cc
+	STA TempSpace2+1
+	CLD
+.plusMatch2
+	SEC
+	RTS
+ENDIF
+.noMatch2
+	CLC
+	RTS
+

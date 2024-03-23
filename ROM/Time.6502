@@ -1,0 +1,282 @@
+\ System constants
+OSWORDPtr	= &F0
+OSWORDNum	= &EF
+OSBYTEA		= &EF
+OSBYTEX		= &F0
+OSBYTEY		= &F1
+TextPointer	= &F2
+TempSpace	= &A8		\\ A8 - AF supposed to be usable for OS commands
+TempSpace2	= &E4		\\ E4 - E6 general purpose
+EVENTV		= &220
+OSASCI		= &FFE3
+OSWRCH		= &FFEE
+OSNEWL		= &FFE7
+GSREAD		= &FFC5
+GSINIT		= &FFC2
+
+DEBUG_CLOCK = 1			\\ change OSBYTE &A1 & &A2 to read upper page of NVRAM
+INC_SECONDS = 1			\\ implement S+-ss.cc to adjust clock to centisecond
+
+ORG &8000
+
+.codeStart
+
+\*******************************************************\
+\														\
+\				ROM header								\
+\														\
+\*******************************************************\
+
+	EQUB 0,0,0				\\ not a language
+	JMP ROM_service
+	EQUB &82				\\ 6502 code, no relocation, not a language, service
+	EQUB ROM_copyright - codeStart - 1
+	EQUB 01					\\ version 01
+	EQUS "Time", 0			\\ Title
+.ROM_copyright
+	EQUS "(C) 2023 Barney Hilken", 0
+	EQUD 0
+
+.ROM_service
+	CMP #1
+	BNE notSetup
+	JSR VIA_setup			\\ Setup after reset
+	LDA #1
+	RTS
+.notSetup
+	CMP #4
+	BNE notCommand
+	JMP doOSCLI				\\ perform OSCLI command
+.notCommand
+	CMP #7
+	BNE notOSBYTE
+	LDA OSBYTEA				\\ Check OSBYTE number
+	CMP #&A1
+	BNE notOSBYTEA1
+	LDX OSBYTEX
+IF DEBUG_CLOCK
+	SEC
+ELSE
+	CLC
+ENDIF
+	JSR FRAM_readByte		\\ perform OSBYTE &A1
+	LDA #0
+	RTS
+.notOSBYTEA1
+	CMP #&A2
+	BNE notOSBYTEA2
+	LDX OSBYTEX
+	LDY OSBYTEY
+IF DEBUG_CLOCK
+	SEC
+ELSE
+	CLC
+ENDIF
+	JSR FRAM_writeByte		\\ perform OSBYTE &A2
+	LDA #0
+	RTS
+.notOSBYTEA2
+	LDA #7
+	RTS
+.notOSBYTE
+	CMP #8
+	BNE notOSWORD
+	TYA
+	PHA
+	TXA
+	PHA
+	LDA OSWORDNum			\\ Check OSWORD number
+	CMP #&0E
+	BNE notOSWORD0E
+	JSR OSWORD0E			\\ perform OSWORD &0E
+	JMP done
+.notOSWORD0E
+	CMP #&0F
+	BNE notOSWORD0F
+	JSR OSWORD0F			\\ perform OSWORD &0F
+	JMP done
+.notOSWORD0F
+	LDA #7
+.done
+	STA TempSpace
+	PLA
+	TAX
+	PLA
+	TAY
+	LDA TempSpace
+.notOSWORD
+	RTS
+
+\*******************************************************\
+\														\
+\				OSCLI									\
+\														\
+\*******************************************************\
+.TIMEstring
+	EQUS "TIME", &0
+	
+.doOSCLI
+	TYA
+	PHA
+	TXA
+	PHA
+	CLC
+	JSR GSINIT				\\ start parsing line
+	BEQ notTime
+	LDX #0					\\ index through "TIME"
+.timeLoop
+	JSR GSREAD				\\ next character
+	BCS notTime				\\ end of word before end of "TIME"
+	AND #LO(NOT(&20))		\\ capitalise
+	EOR TIMEstring,X		\\ compare with "TIME"
+	BNE notTime
+	INX	
+	LDA TIMEstring,X		\\ check for end of "TIME"
+	BNE timeLoop			\\ loop to next char
+	JSR GSREAD				\\ next character
+	BCC notTime				\\ not end of word
+	BNE setTime				\\ not end of line
+.printTime
+	LDY #0
+	STY OSWORDPtr+1
+	JSR RTC_readTimeString	\\ read current time and send to OSWRCH
+	JSR OSNEWL
+	LDA #0
+	JMP done
+.notTime
+	LDA #4
+	BNE done
+
+
+.setTime
+	STY TempSpace			\\ save Y
+	LDX #1					\\ count rest of line, except trailing spaces
+.setTimeLoop
+	STX TempSpace+1
+.noSaveLoop
+	INY
+	INX
+	LDA (TextPointer),Y
+	CMP #&0D				\\ check for end of line
+	BEQ endOfText
+	CMP #' '				\\ check for whitespace
+	BNE setTimeLoop
+	BEQ noSaveLoop
+.endOfText
+	LDA TextPointer
+	STA OSWORDPtr
+	LDA TextPointer+1
+	STA OSWORDPtr+1
+	LDY TempSpace			\\ back to saved point
+	LDA TempSpace+1			\\ retrieve length without trailing whitespace
+	JSR doOSWORD0F
+	BEQ done
+	LDY #timeErrorEnd - timeError - 1
+.timeErrorLoop
+	LDA timeError,Y
+	STA &0100,Y
+	DEY
+	BPL timeErrorLoop
+	JMP &0100
+.timeError
+	BRK
+	EQUS 252, "Bad time", 0
+.timeErrorEnd
+
+\*******************************************************\
+\														\
+\				OSWORD 14 & 15							\
+\														\
+\*******************************************************\
+
+.OSWORD0E					\\ Read clock in various ways. Preserves X, Y, sets A to 0 if done or 8 if not done
+	LDY #0
+	LDA (OSWORDPtr),Y		\\ function determined by first byte in buffer
+	BNE notReadTimeString	\\ 0: read date & time as string
+	JSR RTC_readTimeString
+	LDA #0
+	RTS
+.notReadTimeString
+	CMP #1					\\ 1: read date & time as BCD
+	BNE notReadTimeBCD
+	JSR RTC_readTimeBCD
+	LDA #0
+	RTS
+.notReadTimeBCD
+	CMP #2					\\ 2: convert BCD date & time to string
+	BNE notConvertBCDTime	
+	JSR RTC_ConvertTimeString
+	LDA #0
+	RTS
+.notConvertBCDTime
+	LDA #8
+	RTS
+
+
+
+.OSWORD0F					\\ set date, time & alarm from string. Preserves X, Y, sets A to 0 if done or 8 if not done
+	LDY #0
+	LDA (OSWORDPtr),Y
+	INY
+.doOSWORD0F
+IF INC_SECONDS
+	CMP #1					\\ 1: S: sync with seconds tick
+	BNE notSecondSync
+	LDA (OSWORDPtr),Y		\\ check character
+	AND #LO(NOT(&20))		\\ ignore capitalisation
+	CMP #'S'
+	BNE notSetDateTime
+	JSR RTC_Synchronise
+	JMP doneOSWORD0f
+.notSecondSync
+ENDIF
+	CMP #3					\\ 3: set time zone-- UTC, GMT, BST
+	BNE notSetBSTZone
+	JSR RTC_setBSTZone
+	JMP doneOSWORD0f
+.notSetBSTZone
+	CMP #6					\\ 6: set time zone-- UTC+hh or UTC-hh
+	BNE notSetTimeZone
+	JSR RTC_setTimeZone
+	JMP doneOSWORD0f
+.notSetTimeZone
+IF INC_SECONDS
+	CMP #7					\\ 7: increment seconds-- S+ss.cc or S-ss.cc
+	BNE notIncSeconds
+	JSR RTC_incSeconds
+	JMP doneOSWORD0f
+.notIncSeconds
+ENDIF
+	CMP #8					\\ 8: set time-- hh:mm:ss
+	BNE notSetTimeOnly
+	JSR RTC_setTimeOnly
+	JMP doneOSWORD0f
+.notSetTimeOnly
+	CMP #15					\\ 15: set date-- www,dd mmm yyyy
+	BNE notSetDateOnly
+	JSR RTC_setDateOnly
+	JMP doneOSWORD0f
+.notSetDateOnly
+	CMP #24					\\ 24: set date & time-- www,dd mmm yyyy.hh:mm:ss
+	BNE notSetDateTime
+	JSR RTC_setDateTime
+.doneOSWORD0f
+	BCC notSetDateTime		\\ error in time string
+	LDA #0
+	RTS
+.notSetDateTime
+	LDA #8
+	RTS
+
+
+
+INCLUDE "VIA.6502"
+INCLUDE "Clock.6502"
+INCLUDE "TimeStrings.6502"
+
+	
+
+.codeEnd
+
+PRINT "Code size ", codeEnd - codeStart, "bytes"
+SAVE "TIME", codeStart, codeEnd, VIA_setup
