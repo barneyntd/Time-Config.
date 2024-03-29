@@ -15,11 +15,6 @@ DaysCount = 6
 .RTC_BSTString
 	EQUS "UTCGMTBST"
 BSTCount = 2
-IF SAVE_ALARMS
-.RTC_OrdinalsString
-	EQUS "1st2nd3rd4th5thpenlst"
-OrdinalsCount = 6
-ENDIF
 
 
 .RTC_BSTOffset
@@ -89,23 +84,6 @@ ENDIF
 .RTC_TimetoText				\\ convert time in TempSpace to string in (OSWORDPtr),Y or OSWRCH
 	LDY #0
 	LDA TempWkday			\\ weekday
-IF SAVE_ALARMS
-	BMI noOrdinal
-	LSR A
-	LSR A
-	LSR A
-	LSR A
-	BEQ noOrdinal2
-	CLC
-	ADC #(RTC_OrdinalsString - RTC_TLAtable - 1) DIV 3
-	JSR RTC_TLAtoText
-	LDA #' '	
-	JSR RTC_OutputText
-.noOrdinal2
-	LDA TempWkday
-	AND #&0F
-.noOrdinal
-ENDIF
 	CLC
 	ADC #(RTC_DaysString - RTC_TLAtable) DIV 3
 	JSR RTC_TLAtoText
@@ -157,7 +135,7 @@ ENDIF
 	JMP RTC_OutputText
 
 
-IF SAVE_ALARMS OR SAVE_SETTIME
+IF SAVE_SETTIME
 .RTC_readAlarmString		\\ Read date & time from NVRAM & convert to string; A = alarm no, or N for set time
 	JSR RTC_readSavedTime
 	JMP RTC_TimetoText
@@ -258,7 +236,7 @@ ENDIF
 	STA (OSWORDPtr),Y
 	RTS
 
-IF SAVE_ALARMS OR SAVE_SETTIME
+IF SAVE_SETTIME
 .RTC_readAlarmBCD		\\ Read date & time from NVRAM & convert to ABCD; A = alarm no, or N for set time
 	JSR RTC_readSavedTime
 	JMP RTC_TimeToABCD
@@ -572,115 +550,4 @@ IF CALIBRATION
 ENDIF
 
 
-IF SAVE_ALARMS
-.RTC_ParseANumber			\\ parse string of the form Ann= in (OSWORDPtr),Y, returning nn binary in A or C clear if no match
-	LDA (OSWORDPtr),Y		\\ check for 'A'
-	AND #LO(NOT(&20))		\\ ignore capitalisation
-	CMP #'A'
-	BNE noMatch2
-	INY						\\ skip 'A'
-	JSR RTC_textToBCD		\\ read alarm number
-	BCC noMatch2
-	CMP #&40				\\ alarms are numbered 00 - 39
-	BCS noMatch2
-	TAX
-	LDA #'='
-	CMP (OSWORDPtr),Y		\\ check for '='
-	BNE noMatch2
-	INY						\\ skip '='
-	TXA
-	JSR BCDtoBinary
-	SEC
-	RTS
-
-.RTC_ParseOrdinal			\\ parse ordinal 1st - 5th, pen, lst followed by wkday, returning 1 - 7 *16 + wkday in TempWkday or &FF & C clear if no match
-	STY TextPointer
-	LDA #LO(RTC_OrdinalsString + OrdinalsCount*3)
-	SEC
-	SBC TextPointer
-	STA TextPointer
-	LDA #HI(RTC_OrdinalsString + OrdinalsCount*3)
-	SBC #0
-	STA TextPointer+1
-	LDX #OrdinalsCount
-	JSR RTC_matchWord
-	BMI noMatch2
-	INX						\\ 1 = 1st, 7 = lst
-	LDA #' '
-	CMP (OSWORDPtr),Y		\\ check for ' '
-	BNE noMatch2
-	INY						\\ skip ' '
-	TXA
-	ASL A
-	ASL A
-	ASL A
-	ASL A
-	PHA
-	JSR RTC_ParseWeekday
-	PLA
-	BCC noMatch2
-	ORA TempWkday
-	STA TempWkday
-	SEC
-	RTS
-
-.RTC_ParseAlarmYearlyNT		\\ parse string of the form dd mmm
-	JSR RTC_textToBCD		\\ find day
-	BCC noMatch3
-	STA TempDay				\\ day
-.parseAFromMonth
-	LDA #' '
-	CMP (OSWORDPtr),Y		\\ check for ' '
-	BNE noMatch3
-	INY						\\ skip ' '
-	JSR RTC_ParseMonth		\\ find month
-	RTS
-
-.RTC_ParseAlarmYearly		\\ parse string of the form dd mmm.hh:mm:ss
-	JSR RTC_ParseAlarmYearlyNT		\\ find day & month
-	BCC noMatch3
-.parseAFromHour
-	LDA #'.'
-	CMP (OSWORDPtr),Y		\\ check for '.'
-	BNE noMatch3
-	INY
-	JMP RTC_ParseTime
-
-.RTC_ParseAlarmYearlyOrdNT	\\ parse string of the form ooo www mmm
-	JSR RTC_ParseOrdinal	\\ find ordinal & wkday
-	BCS parseAFromMonth
-	RTS
-
-.RTC_ParseAlarmYearlyOrd	\\ parse string of the form ooo www mmm.hh:mm:ss
-	JSR RTC_ParseAlarmYearlyOrdNT	\\ find ordinal & wkday
-	BCS parseAFromHour
-	RTS
-
-.RTC_ParseAlarmMonthlyNT	\\ parse string of the form dd
-	JSR RTC_textToBCD		\\ find day
-	STA TempDay				\\ day
-	RTS
-
-.RTC_ParseAlarmMonthly		\\ parse string of the form dd.hh:mm:ss
-	JSR RTC_ParseAlarmMonthlyNT		\\ find day
-	BCS parseAFromHour
-	RTS
-
-RTC_ParseAlarmMonthlyOrdNT = RTC_ParseOrdinal	\\ find ordinal & wkday
-
-.RTC_ParseAlarmMonthlyOrd	\\ parse string of the form ooo www.hh:mm:ss
-	JSR RTC_ParseOrdinal	\\ find ordinal & wkday
-	BCS parseAFromHour
-	RTS
-
-RTC_ParseAlarmWeeklyNT	= RTC_ParseWeekday	\\ parse string of the form www
-
-.RTC_ParseAlarmWeekly		\\ parse string of the form www.hh:mm:ss
-	JSR RTC_ParseWeekday	\\ find wkday
-	BCS parseAFromHour
-	RTS
-.noMatch3
-	CLC
-	RTS
-ENDIF
 
