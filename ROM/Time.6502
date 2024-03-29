@@ -14,7 +14,6 @@ OSNEWL		= &FFE7
 GSREAD		= &FFC5
 GSINIT		= &FFC2
 
-DEBUG_CLOCK = 0			\\ change OSBYTE &A1 & &A2 to read upper page of NVRAM
 SAVE_ALARMS = 0			\\ implement Ann=... to save dates & times in NVRAM
 SAVE_SETTIME = 1		\\ save date & time of last set in UTC
 CALIBRATION = 1			\\ implement C+-cc to adjust offset register
@@ -57,11 +56,7 @@ ORG &8000
 	CMP #&A1
 	BNE notOSBYTEA1
 	LDX OSBYTEX
-IF DEBUG_CLOCK
-	SEC
-ELSE
 	CLC
-ENDIF
 	JSR FRAM_readByte		\\ perform OSBYTE &A1
 	LDA #0
 	RTS
@@ -70,11 +65,7 @@ ENDIF
 	BNE notOSBYTEA2
 	LDX OSBYTEX
 	LDY OSBYTEY
-IF DEBUG_CLOCK
-	SEC
-ELSE
 	CLC
-ENDIF
 	JSR FRAM_writeByte		\\ perform OSBYTE &A2
 	LDA #0
 	RTS
@@ -191,7 +182,7 @@ ENDIF
 \														\
 \*******************************************************\
 
-.OSWORD0E					\\ Read clock in various ways. Preserves X, Y, sets A to 0 if done or 8 if not done
+.OSWORD0E					\\ Read clock in various ways. Sets A to 0 if done or 8 if not done
 	LDY #0
 	LDA (OSWORDPtr),Y		\\ function determined by first byte in buffer
 	BNE notReadTimeString	\\ 0: read date & time as string
@@ -237,7 +228,7 @@ ENDIF
 	LDA #8
 	RTS
 
-.OSWORD0F					\\ set date, time & alarm from string. Preserves X, Y, sets A to 0 if done or 8 if not done
+.OSWORD0F					\\ set date, time & alarm from string. Sets A to 0 if done or 8 if not done
 	LDY #0
 	LDA (OSWORDPtr),Y
 	BEQ OSW_unused

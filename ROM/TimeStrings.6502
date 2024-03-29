@@ -250,7 +250,7 @@ ENDIF
 	JMP RTC_TimetoText		\\ and print to string
 
 .RTC_ReadTimezoneBCD		\\ read timezone from FRAM as signed BCD to buffer
-	LDX NVR_HourOffset
+	LDX #NVR_HourOffset
 	SEC
 	JSR FRAM_readByte
 	TYA

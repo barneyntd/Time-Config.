@@ -1,0 +1,95 @@
+
+
+
+
+.commandTable
+	EQUS "TIME", 0+&80, HI(CMD_time), LO(CMD_time)
+	EQUS "CONFIGURE", 0+&80, HI(CMD_configure), LO(CMD_configure)
+	EQUS "STATUS", 0+&80, HI(CMD_status), LO(CMD_status)
+	EQUS "UNPLUG", 0+&80, HI(CMD_unplug), LO(CMD_unplug)
+	EQUS "INSERT", 0+&80, HI(CMD_insert), LO(CMD_insert)
+	EQUS "ROMS", 0+&80, HI(CMD_roms), LO(CMD_roms)
+	EQUB 0
+.configTable
+	EQUS "BAUD", 0+&80, HI(CMD_baud), LO(CMD_baud)
+	EQUS "BOOT",	16+&80,	%11101111,	%10001000			\\ use keyboard switch for default
+	EQUS "CAPS",	11+&80,	%11000111,	%100
+	EQUS "DATA",	16+&80,	%00011111,	%101
+	EQUS "DELAY",	12+&80,	%00000000,	%00110010
+	EQUS "DIR",		11+&80,	%10111111,	0
+	EQUS "FDRIVE",	11+&80,	%11111000,	%10110000			\\ use keyboard switch for default
+	EQUS "FILE",	5+&80,	%11110000,	%1111	
+	EQUS "FLOPPY",	11+&80,	%01111111,	1
+	EQUS "HARD",	11+&80,	%01111111,	0
+	EQUS "IGNORE",	14+&80,	%00000000,	%00001010
+	EQUS "LANG",	5+&80,	%00001111,	%1111
+	EQUS "LOUD",	16+&80,	%11111101,	%1
+	EQUS "MODE",	10+&80,	%11111000,	%10000111			\\ use keyboard switch for default
+	EQUS "NOBOOT",	16+&80,	%11101111,	%10001000			\\ use keyboard switch for default
+	EQUS "NOCAPS",	11+&80,	%11000111,	%010
+	EQUS "NODIR",	11+&80,	%10111111,	1
+	EQUS "NOTUBE",	15+&80,	%11111110,	0
+	EQUS "PRINT",	15+&80,	%00011111,	%001
+	EQUS "QUIET",	16+&80,	%11111101,	0
+	EQUS "REPEAT",	13+&80,	%00000000,	%00001000
+	EQUS "SHCAPS",	11+&80,	%11000111,	%001
+	EQUS "TUBE",	15+&80,	%11111110,	1
+	EQUS "TV", 0+&80, HI(CMD_tv), LO(CMD_tv)
+	EQUB 0
+	
+
+	JSR GSINIT						\\ skip spaces
+	BEQ empty
+	STY TempSpace2					\\ save start of word
+.wordLoop
+	LDA (TextPointer),Y
+	CMP #'.'						\\ abbreviation
+	BEQ abbrev
+	AND #LO(NOT(&20))				\\ capitalise
+	CMP CommandTable,X
+	BNE noMatch
+	INX
+	INY
+	BIT CommandTable,X				\\ end of word in table
+	BPL wordLoop
+	CMP "@"
+	BCS notWord
+	BCC wordMatch
+.noMatch
+	INX
+	LDA CommandTable,X
+	BPL	noMatch
+.notWord
+	LDY TempSpace2
+	INX
+	INX
+	INX
+	LDA CommandTable,X
+	BNE wordLoop
+	RTS
+.abbrev
+	INX
+.wordMatch
+	LDA CommandTable,X
+	BPL	abbrev
+	AND #&7F
+	BNE doConfig
+	LDA CommandTable+1,X
+	PHA
+	LDA CommandTable+2,X
+	PHA
+	RTS
+.doConfig
+	STA TempSpace
+	LDA	CommandTable+1,X
+	STA TempSpace+1
+	LDA CommandTable+2,X
+	STA TempSpace+2
+	JSR GSINIT
+	BEQ defaultConfig
+	
+
+		
+
+
+	

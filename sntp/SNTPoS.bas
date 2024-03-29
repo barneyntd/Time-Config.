@@ -1,18 +1,21 @@
    10 *FX2,2
    20 *FX7,8
    30 *FX8,8
+   40 *FX21,1
    50 *FX21,2
-  100  PROCdimspace:PROCcode
-  140 PROCTIsetup:PRINT"Local time: ";TI$;" UTC";FNsigned(TZ%)
+  100 PROCdimspace:PROCcode
+  140 PROCTIsetup:PRINT"Time: ";TI$;" UTC";FNsigned(TZ%)
   150 PROCsend
   160 PROCrecv
   170 IF Error$<>"" THEN PRINT Error$:END
-  185 PROConwire
+  180 PROConwire
+  185 @%=&30A
   190 IF LI%<>0 PRINT"Warning: leap second due in the last minute of this month!"
-  200 PRINT"Local time is ";ABS(theta);" seconds ";:IF theta>0 PRINT"behind server" ELSE PRINT"ahead of server"
+  200 PRINT"Time is ";ABS(theta);" seconds ";:IF theta>0 PRINT"behind server" ELSE PRINT"ahead of server"
   210 PRINT"(roundtrip time ";delta;" seconds)"
+  215 @%=&90A
   220 IF ABS(theta) < 0.015 END
-  230 PRINT"Last clock correction was ";TI%-TS%;" seconds ago."
+  230 PRINT"Last clock correction ";TI%-TS%;" seconds ago."
   240 PRINT"Press","0 to quit"'" ","1 to correct time"
   250 IF TI%-TS%>7000 AND ABS(theta)>2.17E-6*(TI%-TS%) PRINT" ","2 to correct time and recalibrate clock"'"(Don't recalibrate after leap seconds)"
   260 REPEAT:G$=GET$:UNTIL "0"<=G$ AND G$<="2"
