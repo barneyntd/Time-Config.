@@ -14,7 +14,6 @@ OSNEWL		= &FFE7
 GSREAD		= &FFC5
 GSINIT		= &FFC2
 
-SAVE_ALARMS = 0			\\ implement Ann=... to save dates & times in NVRAM
 SAVE_SETTIME = 1		\\ save date & time of last set in UTC
 CALIBRATION = 1			\\ implement C+-cc to adjust offset register
 
@@ -208,7 +207,7 @@ ORG &8000
 	LDA #0
 	RTS
 .notReadTimezone
-IF SAVE_ALARMS OR SAVE_SETTIME
+IF SAVE_SETTIME
 	INY
 	CMP #5					\\ 5: read alarm date & time as string
 	BNE notReadAlarmString
@@ -236,17 +235,6 @@ ENDIF
 .doOSWORD0F
 	CMP #25
 	BCS OSW_unused
-IF SAVE_ALARMS
-	ASL A					\\ 2 - 48 even
-	TAX
-	LDA (OSWORDPtr),Y
-	AND #LO(NOT(&20))		\\ ignore capitalisation
-	CMP #'A'				\\ check for alarm
-	BEQ alarmTable
-	DEX
-.alarmTable
-	TXA						\\ 1 - 48, even = alarm
-ENDIF
 	ASL A
 	TAX	
 	JSR OSW_JMPtable
@@ -272,33 +260,13 @@ ENDIF
 	JSR RTC_Synchronise
 	JMP doneOSWORD0f
 
-IF SAVE_ALARMS
-.OSW_fifteen
-	TYA
-	PHA
-	CLC
-	ADC #6					\\ Ann=dd.
-	TAY
-	LDA (OSWORDPtr),Y
-	CMP #'.'
-	BNE notSetAlarmMonthly
-	PLA
-	TAY
-	JSR RTC_setAlarmMonthly
-	JMP doneOSWORD0f
-.notSetAlarmMonthly
-	PLA
-	TAY
-	JSR RTC_setAlarmYearlyOrdNT
-	JMP doneOSWORD0f
-ENDIF
 
 
 
 INCLUDE "VIA.6502"
 INCLUDE "Clock.6502"
 INCLUDE "TimeStrings.6502"
-IF SAVE_ALARMS OR SAVE_SETTIME
+IF SAVE_SETTIME
 	INCLUDE "SaveTimes.6502"
 ENDIF
 
@@ -307,21 +275,12 @@ ENDIF
 IF CALIBRATION = 0
 	RTC_tuneClock = OSW_unused
 ENDIF
-IF SAVE_ALARMS
-	EQUW OSW_oneChar-1, OSW_unused-1, OSW_unused-1, OSW_unused-1, RTC_setBSTZone-1, OSW_unused-1, RTC_tuneClock-1, RTC_clearAlarm-1
-	EQUW OSW_unused-1, OSW_unused-1, RTC_setTimeZone-1, RTC_setAlarmMonthlyNT-1, RTC_incSeconds-1, RTC_setAlarmWeeklyNT-1, RTC_setTimeOnly-1, OSW_unused-1
-	EQUW OSW_unused-1, RTC_setAlarmHourly-1, OSW_unused-1, RTC_setAlarmYearlyNT-1, OSW_unused-1, RTC_setAlarmMonthlyOrdNT-1, OSW_unused-1, RTC_setAlarmDaily-1
-	EQUW OSW_unused-1, OSW_unused-1, OSW_unused-1, OSW_unused-1, RTC_setDateOnly-1, OSW_fifteen-1, OSW_unused-1, RTC_setAlarmWeekly-1
-	EQUW OSW_unused-1, OSW_unused-1, OSW_unused-1, OSW_unused-1, OSW_unused-1, RTC_setAlarmYearly-1, OSW_unused-1, RTC_setAlarmMonthlyOrd-1
-	EQUW OSW_unused-1, OSW_unused-1, OSW_unused-1, OSW_unused-1, OSW_unused-1, OSW_unused-1, RTC_setDateTime-1, RTC_setAlarmYearlyOrd-1
-ELSE
 	EQUW OSW_oneChar-1, OSW_unused-1, RTC_setBSTZone-1, RTC_tuneClock-1
 	EQUW OSW_unused-1, RTC_setTimeZone-1, RTC_incSeconds-1, RTC_setTimeOnly-1
 	EQUW OSW_unused-1, OSW_unused-1, OSW_unused-1, OSW_unused-1
 	EQUW OSW_unused-1, OSW_unused-1, RTC_setDateOnly-1, OSW_unused-1
 	EQUW OSW_unused-1, OSW_unused-1,OSW_unused-1, OSW_unused-1
 	EQUW OSW_unused-1, OSW_unused-1,OSW_unused-1, RTC_setDateTime-1
-ENDIF
 
 
 
