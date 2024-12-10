@@ -1,8 +1,8 @@
 \ NVRAM locations (upper page)
-NVR_Century		= &FF
-NVR_Flags		= &FE
+NVR_Flags		= &FF
 NVR_Flags_8099	= %10000000			\\ Year is '80 - '99
 NVR_Flags_FLY	= %01000000			\\ False leap year, not yet corrected
+NVR_Century		= &FE
 NVR_HourOffset	= &FD				\\ Offset from UTC for timezone & summertime
 NVR_MinuteOffset= &FC				\\ Not currently implemented
 NVR_SetTime		= &F0				\\ time clock was set, in UTC

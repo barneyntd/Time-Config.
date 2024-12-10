@@ -201,21 +201,13 @@ ORG &8000
 	LDA #0
 	RTS
 .notConvertBCDTime
-	CMP #7					\\ 7: read timezone as signed BCD
+	CMP #5					\\ 5: read century & timezone as BCD
 	BNE notReadTimezone	
-	JSR RTC_ReadTimezoneBCD
+	JSR RTC_ReadCTZBCD
 	LDA #0
 	RTS
 .notReadTimezone
 IF SAVE_SETTIME
-	INY
-	CMP #5					\\ 5: read alarm date & time as string
-	BNE notReadAlarmString
-	LDA (OSWORDPtr),Y		\\ alarm number determined by second byte in buffer
-	JSR RTC_readAlarmString
-	LDA #0
-	RTS
-.notReadAlarmString
 	CMP #6					\\ 6: read alarm date & time as BCD
 	BNE notReadAlarmBCD
 	LDA (OSWORDPtr),Y		\\ alarm number determined by second byte in buffer
@@ -224,6 +216,7 @@ IF SAVE_SETTIME
 	RTS
 .notReadAlarmBCD
 ENDIF
+.OSW_unused
 	LDA #8
 	RTS
 
@@ -241,9 +234,6 @@ ENDIF
 .doneOSWORD0f
 	BCC OSW_unused			\\ error in time string
 	LDA #0
-	RTS
-.OSW_unused
-	LDA #8
 	RTS
 .OSW_JMPtable
 	LDA OSWORDJMPtable-1,X	\\ address high

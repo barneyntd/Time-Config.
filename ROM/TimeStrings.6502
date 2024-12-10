@@ -13,12 +13,10 @@ MonthsCount	= 11
 	EQUS "SunMonTueWedThuFriSat"
 DaysCount = 6
 .RTC_BSTString
-	EQUS "UTCGMTBST"
-BSTCount = 2
-
-
+	EQUS "UTCGMTBSTWETCETEETFETADTASTEDTESTCDTCSTMDTMSTPDTPSTEATCATWATWSTAETICTCSTJST"
+BSTCount = 24
 .RTC_BSTOffset
-	EQUB &0,&0,&1
+	EQUB &0,&0,&1,&0,&1,&2,&3,&97,&96,&96,&95,&95,&94,&94,&93,&93,&92,&3,&2,&1,&8,&10,&7,&8,&9
 
 
 \*******************************************************\
@@ -135,11 +133,11 @@ BSTCount = 2
 	JMP RTC_OutputText
 
 
-IF SAVE_SETTIME
-.RTC_readAlarmString		\\ Read date & time from NVRAM & convert to string; A = alarm no, or N for set time
-	JSR RTC_readSavedTime
-	JMP RTC_TimetoText
-ENDIF
+\\	IF SAVE_SETTIME
+\\	.RTC_readAlarmString		\\ Read date & time from NVRAM & convert to string; A = alarm no, or N for set time
+\\		JSR RTC_readSavedTime
+\\		JMP RTC_TimetoText
+\\	ENDIF
 	
 
 \*******************************************************\
@@ -227,17 +225,20 @@ ENDIF
 	JSR RTC_ABCDtoTime2		\\ convert to RTC time
 	JMP RTC_TimetoText		\\ and print to string
 
-.RTC_ReadTimezoneBCD		\\ read timezone from FRAM as signed BCD to buffer
-	LDX #NVR_HourOffset
-	SEC
-	JSR FRAM_readByte
-	TYA
-	LDY #0
-	STA (OSWORDPtr),Y
+.RTC_ReadCTZBCD				\\ read century and timezone from FRAM as BCD to buffer
+	LDX #NVR_MinuteOffset
+	LDY #3
+	JMP FRAM_readBytes		\\ read minute offset, hour offset, century
+	LDY #2
+.readCTZloop
+	LDA TempSpace,Y
+	STA (OSWORDPtr),Y		\\ copy result to buffer
+	DEY
+	BPL readCTZloop
 	RTS
 
 IF SAVE_SETTIME
-.RTC_readAlarmBCD		\\ Read date & time from NVRAM & convert to ABCD; A = alarm no, or N for set time
+.RTC_readAlarmBCD			\\ Read date & time from NVRAM & convert to ABCD; A = alarm no, or N for set time
 	JSR RTC_readSavedTime
 	JMP RTC_TimeToABCD
 ENDIF
@@ -446,33 +447,38 @@ ENDIF
 	SEC
 	RTS
 
-.RTC_ParseTimeZone			\\ parse string of the form UTC+hh or UTC-hh
+.RTC_ParseTimeZone			\\ parse string of the form zzz+hh or zzz-hh
 	JSR RTC_ParseBST		\\ parse UTC
 	BCC noMatch2			\\ not recognised
-	BNE noMatch2			\\ not UTC
-	INY						\\ skip + or - sign
+	STA TempSpace			\\ save timezone offset 
+	LDA (OSWORDPtr),Y		\\ + or - sign
+	TAX
+	INY
 	JSR RTC_textToBCD		\\ read number
 	BCC noMatch2
-	CMP #&20				\\ limit to +-19
-	BCS noMatch2
-	STA TempSpace			\\ save number 
-	DEY
-	DEY
-	DEY						\\ go back to +-sign
-	LDA (OSWORDPtr),Y
-	CMP #'+'
+	CPX #'+'
 	BEQ plusMatch
-	CMP #'-'
+	CPX #'-'
 	BNE noMatch2
-	LDA #0
+	STA TempSpace+1
+	LDA TempSpace			\\ load timezone
 	SED
-	SBC TempSpace			\\ negate number; C is set
+	SBC TempSpace+1			\\ subtract number; C is set from CPX
+	JMP limitCheck
+.plusMatch
+	SED
+	CLC
+	ADC TempSpace			\\ add timezone
+.limitCheck
 	CLD
+	CMP #&20
+	BCC below20
+	CMP #&81
+	BCC noMatch2
+.below20
 	SEC
 	RTS
-.plusMatch
-	LDA TempSpace			\\ C is set
-	RTS
+
 
 .RTC_ParseInc				\\ parse string of the form S+ss.cc or S-ss.cc
 	LDA (OSWORDPtr),Y
