@@ -8,15 +8,15 @@
 	EQUS "???"
 .RTC_MonthsString
 	EQUS "JanFebMarAprMayJunJulAugSepOctNovDec"
-MonthsCount	= 11
+MonthsCount	= (P% - RTC_MonthsString)/3
 .RTC_DaysString
 	EQUS "SunMonTueWedThuFriSat"
-DaysCount = 6
+DaysCount = (P% - RTC_DaysString)/3
 .RTC_BSTString
-	EQUS "UTCGMTBSTWETCETEETFETADTASTEDTESTCDTCSTMDTMSTPDTPSTEATCATWATWSTAETICTCSTJST"
-BSTCount = 24
+	EQUS "UTCGMTBSTWETCETEETFETADTASTEDTESTCDTCSTMDTMSTPDTPSTEATCATWATICTCSTJSTNZT"
+BSTCount = (P% - RTC_BSTString)/3
 .RTC_BSTOffset
-	EQUB &0,&0,&1,&0,&1,&2,&3,&97,&96,&96,&95,&95,&94,&94,&93,&93,&92,&3,&2,&1,&8,&10,&7,&8,&9
+	EQUB &0,&0,&1,&0,&1,&2,&3,&97,&96,&96,&95,&95,&94,&94,&93,&93,&92,&3,&2,&1,&7,&8,&9,&12
 
 
 \*******************************************************\
@@ -133,12 +133,6 @@ BSTCount = 24
 	JMP RTC_OutputText
 
 
-\\	IF SAVE_SETTIME
-\\	.RTC_readAlarmString		\\ Read date & time from NVRAM & convert to string; A = alarm no, or N for set time
-\\		JSR RTC_readSavedTime
-\\		JMP RTC_TimetoText
-\\	ENDIF
-	
 
 \*******************************************************\
 \														\
