@@ -1,95 +1,363 @@
 
+.helpTime
+	EQUS "(<timestr>)",0
+.helpConf
+	EQUS "(<config>)",0
+.helpRom
+	EQUS "<0-F>",0
+.help7
+	EQUS "<0-7>",0
+.help8
+	EQUS "<0-8>",0
+.help255
+	EQUS "<0-255>",0
+.helpTV
+	EQUS "<252-3>(,<0-1>)",0
+\\.helpSid
+\\	EQUS "(<0-127>.)<0-255>",0
 
-
+helpBase = P% - &100
+IF helpTime - helpBase < &80
+   ERROR "Table too large"
+ENDIF
 
 .commandTable
-	EQUS "TIME", 0+&80, HI(CMD_time), LO(CMD_time)
-	EQUS "CONFIGURE", 0+&80, HI(CMD_configure), LO(CMD_configure)
-	EQUS "STATUS", 0+&80, HI(CMD_status), LO(CMD_status)
-	EQUS "UNPLUG", 0+&80, HI(CMD_unplug), LO(CMD_unplug)
-	EQUS "INSERT", 0+&80, HI(CMD_insert), LO(CMD_insert)
-	EQUS "ROMS", 0+&80, HI(CMD_roms), LO(CMD_roms)
+	EQUS "TIME", helpTime - helpBase
+	EQUS "CONFIGURE", helpConf - helpBase
+	EQUS "STATUS", helpConf - helpBase
+	EQUS "UNPLUG", helpRom - helpBase
+	EQUS "INSERT", helpRom - helpBase
+	EQUS "ROMS", &FF
 	EQUB 0
-.configTable
-	EQUS "BAUD", 0+&80, HI(CMD_baud), LO(CMD_baud)
-	EQUS "BOOT",	16+&80,	%11101111,	%10001000			\\ use keyboard switch for default
-	EQUS "CAPS",	11+&80,	%11000111,	%100
-	EQUS "DATA",	16+&80,	%00011111,	%101
-	EQUS "DELAY",	12+&80,	%00000000,	%00110010
-	EQUS "DIR",		11+&80,	%10111111,	0
-	EQUS "FDRIVE",	11+&80,	%11111000,	%10110000			\\ use keyboard switch for default
-	EQUS "FILE",	5+&80,	%11110000,	%1111	
-	EQUS "FLOPPY",	11+&80,	%01111111,	1
-	EQUS "HARD",	11+&80,	%01111111,	0
-	EQUS "IGNORE",	14+&80,	%00000000,	%00001010
-	EQUS "LANG",	5+&80,	%00001111,	%1111
-	EQUS "LOUD",	16+&80,	%11111101,	%1
-	EQUS "MODE",	10+&80,	%11111000,	%10000111			\\ use keyboard switch for default
-	EQUS "NOBOOT",	16+&80,	%11101111,	%10001000			\\ use keyboard switch for default
-	EQUS "NOCAPS",	11+&80,	%11000111,	%010
-	EQUS "NODIR",	11+&80,	%10111111,	1
-	EQUS "NOTUBE",	15+&80,	%11111110,	0
-	EQUS "PRINT",	15+&80,	%00011111,	%001
-	EQUS "QUIET",	16+&80,	%11111101,	0
-	EQUS "REPEAT",	13+&80,	%00000000,	%00001000
-	EQUS "SHCAPS",	11+&80,	%11000111,	%001
-	EQUS "TUBE",	15+&80,	%11111110,	1
-	EQUS "TV", 0+&80, HI(CMD_tv), LO(CMD_tv)
-	EQUB 0
-	
 
-	JSR GSINIT						\\ skip spaces
-	BEQ empty
+.configTable
+	EQUS "BAUD", help8 - helpBase
+	EQUS "BOOT", &FF
+	EQUS "CAPS", &FF
+	EQUS "DATA", help7 - helpBase
+	EQUS "DELAY", help255 - helpBase
+	EQUS "DIR", &FF
+\\	EQUS "EXTUBE", &FF
+	EQUS "FDRIVE", help7 - helpBase
+	EQUS "FILE", helpRom - helpBase
+	EQUS "FLOPPY", &FF
+	EQUS "HARD", &FF
+	EQUS "IGNORE", help255 - helpBase
+\\	EQUS "INTUBE", &FF
+	EQUS "LANG", helpRom - helpBase
+	EQUS "LOUD", &FF
+	EQUS "MODE", help7 - helpBase"
+	EQUS "NOBOOT", &FF
+	EQUS "NOCAPS", &FF
+	EQUS "NODIR", &FF
+\\	EQUS "NOSCROLL", &FF
+	EQUS "NOTUBE", &FF
+	EQUS "PRINT", help7 - helpBase
+	EQUS "QUIET", &FF
+	EQUS "REPEAT", help255 - helpBase
+\\	EQUS "SCROLL", &FF
+	EQUS "SHCAPS", &FF
+	EQUS "TUBE", &FF
+	EQUS "TV", helpTV - helpBase
+\\	EQUS "FS", helpSid - helpBase
+\\	EQUS "NOSPACE", &FF
+\\	EQUS "PS", helpSid - helpBase
+\\	EQUS "SPACE", &FF
+	EQUB 0
+
+IF P% - commandTable > 255
+	ERROR "Table too large"
+ENDIF
+
+.cmdJmpTable
+	EQUW CMD_Time-1, CMD_Configure-1, CMD_Status-1, CMD_Unplug-1, CMD_Insert-1, CMD_Roms-1
+
+.configDataTable
+	EQUB 0:		EQUW CMD_Baud-1				\\ BAUD
+	EQUB 16,	%11101111,	%00010000		\\ BOOT -- read keyboard switches for default
+	EQUB 11,	%11000111,	%00100000		\\ CAPS
+	EQUB 16,	%00011111,	%10100000		\\ DATA
+	EQUB 12,	0,			50				\\ DELAY
+	EQUB 11,	%10111111,	%00000000		\\ DIR	
+\\	EQUB 16,	%11111011,	%00000100		\\ EXTUBE
+	EQUB 11+&80, %11111000,	%00110000		\\ FDRIVE -- read keyboard switches for default
+	EQUB 5,		%11110000,	%00001111		\\ FILE
+	EQUB 11,	%01111111,	%10000000		\\ FLOPPY
+	EQUB 11,	%01111111,	%00000000		\\ HARD
+	EQUB 14,	0,			&0				\\ IGNORE
+\\	EQUB 16,	%11111011,	%00000000		\\ INTUBE
+	EQUB 5,		%00001111,	%11110000		\\ LANG
+	EQUB 16,	%11111101,	%00000010		\\ LOUD
+	EQUB 10+&80, %11111000,	%00000111		\\ MODE -- read keyboard switches for default         
+	EQUB 16,	%11101111,	%00000000		\\ NOBOOT
+	EQUB 11,	%11000111,	%00010000		\\ NOCAPS
+	EQUB 11,	%10111111,	%01000000		\\ NODIR
+\\	EQUB 16,	%11110111,	%00001000		\\ NOSCROLL
+	EQUB 15,	%11111110,	%00000000		\\ NOTUBE
+	EQUB 15,	%00011111,	%00100000		\\ PRINT
+	EQUB 16,	%11111101,	%00000000		\\ QUIET
+	EQUB 13,	0,			8				\\ REPEAT
+\\	EQUB 16,	%11110111,	%00000000		\\ SCROLL
+	EQUB 11,	%11000111,	%00001000		\\ SHCAPS
+	EQUB 15,	%11111110,	%00000001		\\ TUBE
+	EQUB 0:		EQUW CMD_TV-1				\\ TV
+\\	EQUB 0:		EQUW CMD_FS-1				\\ FS	
+\\	EQUB 17,	%11111110,  %00000000		\\ NOSPACE
+\\	EQUB 0:		EQUW CMD_PS-1				\\ PS	
+\\	EQUB 17,	%11111110,  %00000001		\\ SPACE
+
+
+
+.CMD_Help							\\ List all commands from commandTable,X, with corresponding helpBase strings
+	LDA commandTable,X
+	BEQ helpDone
+	BMI helpParam
+.commandLoop
+	JSR OSASCI
+	INX
+	BNE CMD_Help
+.helpParam
+	TAY
+	LDA #' '
+.paramLoop
+	JSR OSASCI
+	LDA helpBase,Y
+	BEQ nextLine
+	INY
+	BNE paramLoop
+.nextLine
+	LDA #&0D
+	BNE commandLoop
+.helpDone
+	RTS
+
+
+.CMD_matchCommand					\\ Search for the word at (TextPointer),Y from commandTable,X
+									\\ return with A = CommandTable,X for match, 0 for blank, 4 for no match
+	LDA #0
+	STA TempSpace2+1				\\ save table index
+	CLC
+	JSR GSINIT
+	BEQ blankCommand
 	STY TempSpace2					\\ save start of word
 .wordLoop
-	LDA (TextPointer),Y
-	CMP #'.'						\\ abbreviation
-	BEQ abbrev
+	JSR GSREAD						\\ next character
+	BCS endWord						\\ end of word
+	CMP #'.'
+	BEQ abbrev						\\ abbreviation
 	AND #LO(NOT(&20))				\\ capitalise
 	CMP CommandTable,X
-	BNE noMatch
+	BNE notMatch
 	INX
-	INY
-	BIT CommandTable,X				\\ end of word in table
-	BPL wordLoop
-	CMP "@"
-	BCS notWord
-	BCC wordMatch
-.noMatch
-	INX
-	LDA CommandTable,X
-	BPL	noMatch
-.notWord
-	LDY TempSpace2
-	INX
-	INX
-	INX
-	LDA CommandTable,X
 	BNE wordLoop
-	RTS
+.endWord
+	LDA CommandTable,X				\\ check for end of word in table
+	BPL skipLoop2					\\ no match
+	RTS								\\ match
+.skipLoop
+	INX	
 .abbrev
-	INX
-.wordMatch
+	LDA CommandTable,X				\\ check for end of word in table
+	BPL skipLoop					\\ skip over unabbreviated word
+	RTS
+.skipLoop2
+	INX	
+.notMatch
 	LDA CommandTable,X
-	BPL	abbrev
-	AND #&7F
-	BNE doConfig
-	LDA CommandTable+1,X
+	BPL	skipLoop2					\\ skip over unmatched word
+	INC TempSpace2+1				\\ increment table index
+	LDY TempSpace2					\\ go back to start of word
+	INX								\\ next word in table
+	LDA CommandTable,X				\\ check for table end
+	BNE wordLoop
+	LDA #4
+.blankCommand
+	RTS
+
+
+.CMD_Command
+	LDX #0
+	JSR CMD_matchCommand
+	BPL passCommand					\\ either blank or no match
+	LDA TempSpace2+1
+	ASL A
+	TAX
+	LDA cmdJmpTable+1,X				\\ address high
 	PHA
-	LDA CommandTable+2,X
+	LDA cmdJmpTable,X				\\ address low
+	PHA
+.passCommand
+	RTS
+
+
+.CMD_Time
+	CLC
+	JSR GSINIT				\\ skip spaces
+	BNE setTime				\\ not end of line
+.printTime
+	LDY #0
+	STY OSWORDPtr+1
+	JSR RTC_readTimeString	\\ read current time and send to OSWRCH
+.doneTime
+	LDA #0
+	RTS
+.setTime
+	STY TempSpace			\\ save Y
+	LDX #1					\\ count rest of line, except trailing spaces
+.setTimeLoop
+	STX TempSpace+1
+.noSaveLoop
+	INY
+	INX
+	LDA (TextPointer),Y
+	CMP #&0D				\\ check for end of line
+	BEQ endOfText
+	CMP #' '				\\ check for whitespace
+	BNE setTimeLoop
+	BEQ noSaveLoop
+.endOfText
+	LDA TextPointer
+	STA OSWORDPtr
+	LDA TextPointer+1
+	STA OSWORDPtr+1
+	LDY TempSpace			\\ back to saved point
+	LDA TempSpace+1			\\ retrieve length without trailing whitespace
+	JSR doOSWORD0F
+	BEQ doneTime
+	JSR CMD_doError
+	EQUS 252, "Bad time", 0
+
+
+.CMD_Configure
+	LDX #configTable - commandTable		\\ start searching for config term
+	JSR CMD_matchCommand
+	BEQ blankConfig						\\ no config term
+	BPL passConfig						\\ unrecognised config term
+	STY TempSpace2						\\ save character pos
+	PHA									\\ save parameter description
+	LDA TempSpace2+1					\\ load command index
+	ASL A
+	ADC TempSpace2+1
+	STA TempSpace2+1					\\ multiply index by 3
+	TAY
+	PLA
+	LDX configDataTable,Y				\\ NVRAM address
+	BEQ specialConfig					\\ jump to individual routine
+	CMP #&FF
+	BNE paramConfig						\\ config term with numeric parameter
+.simpleConfig
+	CLC
+	JSR FRAM_readByte					\\ read NVRAM from address at X = configDataTable,Y
+	TYA
+	LDY TempSpace2+1
+	AND configDataTable+1,Y				\\ NVRAM mask relevant bits
+	ORA configDataTable+2,Y				\\ setting
+	CLC
+	JSR FRAM_writeByte					\\ save new value
+	LDA #0
+	RTS
+.blankConfig
+	TYA
+	PHA									\\ save character position
+	LDX #configTable - commandTable
+	JSR CMD_Help						\\ list all config terms + help text
+	PLA
+	TAY
+.passConfig
+	LDA #&28							\\ pass configure on to other roms
+	RTS
+.specialConfig
+	LDA configDataTable+2,Y				\\ address high
+	PHA
+	LDA configDataTable+1,Y				\\ address low
 	PHA
 	RTS
-.doConfig
-	STA TempSpace
-	LDA	CommandTable+1,X
-	STA TempSpace+1
-	LDA CommandTable+2,X
-	STA TempSpace+2
-	JSR GSINIT
-	BEQ defaultConfig
+.paramConfig
+	LDY TempSpace2						\\ get character pos
+	CLC
+	JSR GSINIT							\\ skip spaces
+	BEQ defaultConfig					\\ no parameter, so use default
+	JSR CMD_ParseNum					\\ read numeric parameter
+	STA TempSpace2+2					\\ save it
+	LDY TempSpace2+1					\\ command index
+	LDA configDataTable+1,Y				\\ load mask
+.shiftLoop
+	LSR A
+	BCC shifted
+	ASL TempSpace2+2
+	BCC shiftLoop
+.shifted
+	LDA configDataTable+1,Y				\\ reload mask
+	AND TempSpace2+2					\\ check data size
+	BNE badParam
+	LDX configDataTable,Y
+	CLC
+	JSR FRAM_readByte					\\ read NVRAM from address at X = configDataTable,Y
+	TYA
+	LDY TempSpace2+1
+	AND configDataTable+1,Y				\\ NVRAM mask relevant bits
+	ORA TempSpace2+2					\\ set value
+	CLC
+	JSR FRAM_writeByte					\\ save new value
+	LDA #0
+	RTS
+.badParam
+	JSR CMD_doError
+	EQUS 252, "Bad parameter", 0
+.defaultConfig	
+	TXA									\\ configDataTable,index
+	BPL simpleConfig					\\ dont use keyboard switches
+	AND #&7F
+	PHA									\\ save NVRAM address
+	LDY TempSpace2+1					\\ command index
+	LDA configDataTable+2,Y				\\ load switch mask
+	LDX #&89							\\ start scanning at switch 8/bit 0
+.keyScanLoop
+	LSR A
+	BCC skipKey
+	
+	LDY #&03    						;stop Auto scan
+	STY &FE40   						;by writing to system VIA
+	LDY #&7F    						;set port A to input on bit 7, output on bits 0 to 6
+	STY &FE43   						;
+	STX &FE4F   						;write X to Port A system VIA
+	LDX &FE4F   						;read back &80 if key pressed (M set)
+	LDY #&0B    						;select auto scan of keyboard
+	STY &FE40   						;tell VIA
+
+	
+.CMD_doError
+	PLA
+	STA TempSpace2
+	PLA
+	STA TempSpace2+1
+	LDA #0								\\ opcode for BRK
+	TAY
+.errorLoop
+	STA &0100,Y
+	INY
+	LDA (TempSpace2),Y
+	BNE errorLoop
+	STA &0100,Y
+	JMP &0100
+
 	
 
-		
+.CMD_ParseNum
+
+.CMD_Status
+
+.CMD_Roms
+
+.CMD_Unplug
+
+.CMD_Insert
 
 
-	
+.CMD_Baud
+
+.CMD_TV
+	RTS
+
+
+

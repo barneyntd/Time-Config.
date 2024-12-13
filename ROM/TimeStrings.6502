@@ -13,10 +13,10 @@ MonthsCount	= (P% - RTC_MonthsString)/3
 	EQUS "SunMonTueWedThuFriSat"
 DaysCount = (P% - RTC_DaysString)/3
 .RTC_BSTString
-	EQUS "UTCGMTBSTWETCETEETFETADTASTEDTESTCDTCSTMDTMSTPDTPSTEATCATWATICTCSTJSTNZT"
+	EQUS "UTCGMTBSTWETCETEETFETWGTADTASTEDTESTCDTCSTMDTMSTPDTPSTEATCATWATICTHKTJSTNZT"
 BSTCount = (P% - RTC_BSTString)/3
 .RTC_BSTOffset
-	EQUB &0,&0,&1,&0,&1,&2,&3,&97,&96,&96,&95,&95,&94,&94,&93,&93,&92,&3,&2,&1,&7,&8,&9,&12
+	EQUB &0,&0,&1,&0,&1,&2,&3,&98,&97,&96,&96,&95,&95,&94,&94,&93,&93,&92,&3,&2,&1,&7,&8,&9,&12
 
 
 \*******************************************************\
@@ -222,7 +222,7 @@ BSTCount = (P% - RTC_BSTString)/3
 .RTC_ReadCTZBCD				\\ read century and timezone from FRAM as BCD to buffer
 	LDX #NVR_MinuteOffset
 	LDY #3
-	JMP FRAM_readBytes		\\ read minute offset, hour offset, century
+	JSR FRAM_readBytes		\\ read minute offset, hour offset, century
 	LDY #2
 .readCTZloop
 	LDA TempSpace,Y

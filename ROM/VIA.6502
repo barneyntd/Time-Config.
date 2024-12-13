@@ -340,7 +340,7 @@ FRAM_HIADDR		= %00001000		\\ Use address &100 to &1FF
 	PLP							\\ restore interrupt mask
 	RTS
 
-IF SAVE_ALARMS OR SAVE_SETTIME
+IF SAVE_SETTIME
 .FRAM_writeBytes				\\ write Y bytes to FRAM start address = X + 256 from TempSpace
 	PHP							\\ save interrupt mask
 	SEI							\\ block interrupts
