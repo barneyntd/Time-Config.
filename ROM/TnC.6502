@@ -1,0 +1,285 @@
+\ System constants
+OSWORDPtr	= &F0
+OSWORDNum	= &EF
+OSBYTEA		= &EF
+OSBYTEX		= &F0
+OSBYTEY		= &F1
+TextPointer	= &F2
+TempSpace	= &A8		\\ A8 - AF supposed to be usable for OS commands
+TempSpace2	= &E4		\\ E4 - E6 general purpose, used by GSINIT/GSREAD
+OSBYTE		= &FFF4
+EVENTV		= &220
+OSASCI		= &FFE3
+OSWRCH		= &FFEE
+OSNEWL		= &FFE7
+GSREAD		= &FFC5
+GSINIT		= &FFC2
+
+SAVE_SETTIME = 1		\\ save date & time of last set in UTC
+CALIBRATION = 1			\\ implement C+-cc to adjust offset register
+
+
+ORG &8000
+
+.codeStart
+
+\*******************************************************\
+\														\
+\				ROM header								\
+\														\
+\*******************************************************\
+
+	EQUB 0,0,0						\\ not a language
+	JMP ROM_service
+	EQUB &82						\\ 6502 code, no relocation, not a language, service
+	EQUB ROM_copyright - codeStart - 1
+	EQUB 02							\\ version 02
+.ROM_title
+	EQUS "Time & Config.", 0		\\ Title
+.ROM_version
+	EQUS "0.02", 0					\\ Version
+.ROM_copyright
+	EQUS "(C) 2024 Barney Hilken", 0
+	EQUD 0
+
+.ROM_service
+{
+	CMP #1
+	BNE notSetup
+	JSR VIA_setup			\\ Setup after reset
+	LDA #1
+	RTS
+.notSetup
+	CMP #4
+	BNE notCommand
+	JMP CMD_Command			\\ perform OSCLI command
+.notCommand
+	CMP #7
+	BNE notOSBYTE
+	LDA OSBYTEA				\\ Check OSBYTE number
+	CMP #&A1
+	BNE notOSBYTEA1
+	LDX OSBYTEX
+	CLC
+	JSR FRAM_readByte		\\ perform OSBYTE &A1
+	LDA #0
+	RTS
+.notOSBYTEA1
+	CMP #&A2
+	BNE notOSBYTEA2
+	LDX OSBYTEX
+	LDY OSBYTEY
+	CLC
+	JSR FRAM_writeByte		\\ perform OSBYTE &A2
+	LDA #0
+	RTS
+.notOSBYTEA2
+	LDA #7
+	RTS
+.notOSBYTE
+	CMP #8
+	BNE notOSWORD
+	LDA OSWORDNum			\\ Check OSWORD number
+	CMP #&0E
+	BNE notOSWORD0E
+	JMP OSWORD0E			\\ perform OSWORD &0E
+.notOSWORD0E
+	CMP #&0F
+	BNE notOSWORD0F
+	JMP OSWORD0F			\\ perform OSWORD &0F
+.notOSWORD0F
+	LDA #8
+	RTS
+.notOSWORD
+	CMP #9
+	BNE notHelp
+	JMP Help
+.notHelp
+	RTS
+}
+
+\*******************************************************\
+\														\
+\				*HELP									\
+\														\
+\*******************************************************\
+
+.Help
+{
+	TYA
+	PHA							\\ save character position
+	LDX #helpTable-commandTable
+	JSR CMD_matchCommand		\\ check list of help headings
+	BEQ noHelpTerm
+	BPL doneHelp				\\ not one of ours
+	JSR helpHeading
+	LDX TempSpace+1			\\ index of recognised help heading
+	BNE notTChelp
+	LDX #0
+	JSR CMD_Help				\\ print list of commands & parameters
+	JMP doneHelp
+.notTChelp
+	DEX
+	BNE notTIMESTRhelp
+	LDX #&FF
+.helpLoop1
+	LDA #' '
+	JSR OSASCI
+.helpLoop
+	JSR OSASCI
+	INX
+	LDA timestr1,X
+	BNE helpLoop
+	JSR OSNEWL
+	LDA timestr1+1,X
+	BNE helpLoop1
+	BEQ doneHelp
+.notTIMESTRhelp
+	DEX
+	BNE notTIMEZONEhelp
+	JSR RTC_ListZones			\\ print list of timezones
+	JMP doneHelp
+.notTIMEZONEhelp
+	LDX #configTable-commandTable
+	JSR CMD_Help				\\ print list of configurations & parameters
+	JMP doneHelp
+.noHelpTerm
+	JSR helpHeading
+	LDX #helpTable-commandTable
+	JSR CMD_Help				\\ print list of help headings
+.doneHelp
+	PLA
+	TAY							\\ restore character pos
+	LDA #9						\\ pass on to other roms
+	RTS
+	
+.helpHeading
+	JSR OSNEWL
+	LDY #0
+	LDA ROM_title,Y
+.titleLoop
+	JSR OSASCI					\\ print rom title
+	INY
+	LDA ROM_title,Y
+	BNE titleLoop
+	LDA #' '
+.versionLoop
+	JSR OSASCI					\\ print rom version
+	INY
+	LDA ROM_title,Y
+	BNE versionLoop
+	JMP OSNEWL					\\ print newline
+}
+
+\*******************************************************\
+\														\
+\				OSWORD 14 & 15							\
+\														\
+\*******************************************************\
+
+.OSWORD0E					\\ Read clock in various ways. Sets A to 0 if done or 8 if not done
+{
+	LDY #0
+	LDA (OSWORDPtr),Y		\\ function determined by first byte in buffer
+	BNE notReadTimeString	\\ 0: read date & time as string
+	JSR RTC_readTimeString
+	LDA #0
+	RTS
+.notReadTimeString
+	CMP #1					\\ 1: read date & time as BCD
+	BNE notReadTimeBCD
+	JSR RTC_readTimeBCD
+	LDA #0
+	RTS
+.notReadTimeBCD
+	CMP #2					\\ 2: convert BCD date & time to string
+	BNE notConvertBCDTime	
+	JSR RTC_ConvertTimeString
+	LDA #0
+	RTS
+.notConvertBCDTime
+	CMP #5					\\ 5: read century & timezone as BCD
+	BNE notReadTimezone	
+	JSR RTC_ReadCTZBCD
+	LDA #0
+	RTS
+.notReadTimezone
+IF SAVE_SETTIME
+	CMP #6					\\ 6: read alarm date & time as BCD
+	BNE notReadAlarmBCD
+	INY
+	LDA (OSWORDPtr),Y		\\ alarm number determined by second byte in buffer
+	JSR RTC_readAlarmBCD
+	LDA #0
+	RTS
+.notReadAlarmBCD
+ENDIF
+}
+.OSW_unused
+	LDA #8
+	RTS
+
+
+.OSWORD0F					\\ set date, time & alarm from string. Sets A to 0 if done or 8 if not done
+	LDY #0
+	LDA (OSWORDPtr),Y
+	BEQ OSW_unused
+	INY
+.doOSWORD0F
+{
+	CMP #25
+	BCS OSW_unused
+	ASL A
+	TAX	
+	JSR OSW_JMPtable
+.doneOSWORD0f
+	BCC OSW_unused			\\ error in time string
+	LDA #0
+	RTS
+.OSW_JMPtable
+	LDA OSWORDJMPtable-1,X	\\ address high
+	PHA
+	LDA OSWORDJMPtable-2,X	\\ address low
+	PHA
+	RTS
+}
+
+.OSW_oneChar
+{
+	LDA (OSWORDPtr),Y
+	AND #LO(NOT(&20))		\\ ignore capitalisation
+	CMP #'S'
+	BNE OSW_unused
+	JSR RTC_Synchronise
+	LDA #0
+	RTS
+}
+
+
+
+INCLUDE "VIA.6502"
+INCLUDE "Time.6502"
+INCLUDE "TimeStrings.6502"
+INCLUDE "Commands.6502"
+IF SAVE_SETTIME
+	INCLUDE "SaveTimes.6502"
+ENDIF
+
+
+.OSWORDJMPtable
+IF CALIBRATION = 0
+	RTC_tuneClock = OSW_unused
+ENDIF
+	EQUW OSW_oneChar-1, OSW_unused-1, RTC_setBSTZone-1, RTC_tuneClock-1
+	EQUW OSW_unused-1, RTC_setTimeZone-1, RTC_incSeconds-1, RTC_setTimeOnly-1
+	EQUW OSW_unused-1, OSW_unused-1, OSW_unused-1, OSW_unused-1
+	EQUW OSW_unused-1, OSW_unused-1, RTC_setDateOnly-1, OSW_unused-1
+	EQUW OSW_unused-1, OSW_unused-1,OSW_unused-1, OSW_unused-1
+	EQUW OSW_unused-1, OSW_unused-1,OSW_unused-1, RTC_setDateTime-1
+
+
+
+.codeEnd
+
+PRINT "Code size ", codeEnd - codeStart, "bytes"
+SAVE "TnC", codeStart, codeEnd, VIA_setup

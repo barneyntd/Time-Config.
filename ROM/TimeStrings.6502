@@ -17,7 +17,64 @@ DaysCount = (P% - RTC_DaysString)/3
 BSTCount = (P% - RTC_BSTString)/3
 .RTC_BSTOffset
 	EQUB &0,&0,&1,&0,&1,&2,&3,&98,&97,&96,&96,&95,&95,&94,&94,&93,&93,&92,&3,&2,&1,&7,&8,&9,&12
+.RTC_ListZoneString
+	EQUS " = UTC",0
 
+.RTC_ListZones
+	LDY #0						\\ Y is index through BSTString
+	STY TempSpace				\\ TempSpace is index through BSTOffset
+.listLoop
+	LDX #8
+	LDA #' '					\\ print eight spaces
+.spcLoop
+	JSR OSASCI
+	DEX
+	BNE spcLoop
+	LDX #3
+.firstLoop
+	LDA RTC_BSTString,Y			\\ print character from TLA
+	JSR OSASCI
+	INY
+	DEX
+	BNE firstLoop
+	LDA RTC_ListZoneString
+.secondLoop
+	JSR OSASCI					\\ print character from format string
+	INX
+	LDA RTC_ListZoneString,X
+	BNE secondLoop
+	LDX TempSpace
+	LDA RTC_BSTOffset,X
+	BPL offsetNotNeg
+	LDA #'-'
+	JSR OSASCI
+	LDA #&9A					\\ mangled BCD 100
+	SEC
+	SBC RTC_BSTOffset,X			\\ negate offset
+	BNE printOffset
+.offsetNotNeg
+	LDA #'+'
+	JSR OSASCI
+	LDA RTC_BSTOffset,X
+.printOffset
+	PHA
+	LSR A
+	LSR A
+	LSR A
+	LSR A
+	CLC
+	ADC #'0'					\\ print first digit
+	JSR OSASCI
+	PLA
+	AND #&0F
+	CLC
+	ADC #'0'					\\ print second digit
+	JSR OSASCI
+	INC TempSpace
+	CPY #BSTCount*3
+	BNE listLoop
+	JSR OSNEWL
+	RTS
 
 \*******************************************************\
 \														\
