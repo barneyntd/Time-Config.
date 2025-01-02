@@ -95,6 +95,14 @@ ORG &8000
 	BNE notHelp
 	JMP Help
 .notHelp
+	CMP #&28
+	BNE notUnKnConf
+	JMP CON_Configure
+.notUnKnConf
+	CMP #&29
+	BNE notUnKnStat
+	JMP CON_Status
+.notUnKnStat
 	RTS
 }
 
@@ -261,6 +269,7 @@ INCLUDE "VIA.6502"
 INCLUDE "Time.6502"
 INCLUDE "TimeStrings.6502"
 INCLUDE "Commands.6502"
+INCLUDE "Configure.6502"
 IF SAVE_SETTIME
 	INCLUDE "SaveTimes.6502"
 ENDIF

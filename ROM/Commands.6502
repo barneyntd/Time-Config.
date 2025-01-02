@@ -30,9 +30,11 @@
 .help255
 	EQUS "<0-255>",0
 .helpTV
-	EQUS "<252-3> (<0-1>)",0
+	EQUS "<252-3>(,<0-1>)",0
 \\.helpSid
 \\	EQUS "(<0-127>.)<0-255>",0
+.helpAlt
+	EQUS "/ ",0								\\ must be last
 
 helpBase = P% - &100
 IF timestr1 < helpBase OR helpTime - helpBase < &80
@@ -50,37 +52,37 @@ ENDIF
 
 .configTable
 	EQUS "BAUD", help8 - helpBase
-	EQUS "BOOT", &FF
-	EQUS "CAPS", &FF
+	EQUS "BOOT", helpAlt - helpBase
+	EQUS "NOBOOT", &FF
+	EQUS "CAPS", helpAlt - helpBase
+	EQUS "NOCAPS", helpAlt - helpBase
+	EQUS "SHCAPS", &FF
 	EQUS "DATA", help7 - helpBase
 	EQUS "DELAY", help255 - helpBase
-\\	EQUS "DIR", &FF
-\\	EQUS "EXTUBE", &FF
 	EQUS "FDRIVE", help7 - helpBase
 	EQUS "FILE", helpRom - helpBase
-\\	EQUS "FLOPPY", &FF
-\\	EQUS "HARD", &FF
 	EQUS "IGNORE", help255 - helpBase
-\\	EQUS "INTUBE", &FF
 	EQUS "LANG", helpRom - helpBase
-	EQUS "LOUD", &FF
+	EQUS "LOUD", helpAlt - helpBase
+	EQUS "QUIET", &FF
 	EQUS "MODE", help7 - helpBase
-	EQUS "NOBOOT", &FF
-	EQUS "NOCAPS", &FF
-\\	EQUS "NODIR", &FF
-\\	EQUS "NOSCROLL", &FF
+	EQUS "TUBE", helpAlt - helpBase
 	EQUS "NOTUBE", &FF
 	EQUS "PRINT", help7 - helpBase
-	EQUS "QUIET", &FF
 	EQUS "REPEAT", help255 - helpBase
-\\	EQUS "SCROLL", &FF
-	EQUS "SHCAPS", &FF
-	EQUS "TUBE", &FF
 	EQUS "TV", helpTV - helpBase
+\\	EQUS "INTUBE", helpAlt - helpBase
+\\	EQUS "EXTUBE", &FF
+\\	EQUS "SCROLL", helpAlt - helpBase
+\\	EQUS "NOSCROLL", &FF
+\\	EQUS "DIR", helpAlt - helpBase
+\\	EQUS "NODIR", &FF
+\\	EQUS "FLOPPY", helpAlt - helpBase
+\\	EQUS "HARD", &FF
 \\	EQUS "FS", helpSid - helpBase
-\\	EQUS "NOSPACE", &FF
 \\	EQUS "PS", helpSid - helpBase
-\\	EQUS "SPACE", &FF
+\\	EQUS "SPACE", LDA commandTable-1,X
+\\	EQUS "NOSPACE", &FF
 	EQUB 0
 
 .helpTable
@@ -90,47 +92,12 @@ ENDIF
 	EQUS "CONFIGURE",&FF
 	EQUB 0
 	
-IF P% - commandTable > 255
+IF P% - commandTable > &FF
 	ERROR "Table too large"
 ENDIF
 
 .cmdJmpTable
 	EQUW CMD_Time-1, CMD_Configure-1, CMD_Status-1, CMD_Unplug-1, CMD_Insert-1, CMD_Roms-1
-
-.configDataTable
-	EQUB 0:		EQUW CMD_Baud-1				\\ BAUD
-	EQUB 16,	%11101111,	%00010000		\\ BOOT -- read keyboard switches for default
-	EQUB 11,	%11000111,	%00100000		\\ CAPS
-	EQUB 16,	%00011111,	%10100000		\\ DATA
-	EQUB 12,	0,			50				\\ DELAY
-\\	EQUB 11,	%10111111,	%00000000		\\ DIR		-- ADFS
-\\	EQUB 16,	%11111011,	%00000100		\\ EXTUBE
-	EQUB 11+&80, %11111000,	%00110000		\\ FDRIVE -- read keyboard switches for default
-	EQUB 5,		%11110000,	%00001111		\\ FILE
-\\	EQUB 11,	%01111111,	%10000000		\\ FLOPPY	-- ADFS
-\\	EQUB 11,	%01111111,	%00000000		\\ HARD		-- ADFS
-	EQUB 14,	0,			&0				\\ IGNORE
-\\	EQUB 16,	%11111011,	%00000000		\\ INTUBE
-	EQUB 5,		%00001111,	%11110000		\\ LANG
-	EQUB 16,	%11111101,	%00000010		\\ LOUD
-	EQUB 10+&80, %11111000,	%00000111		\\ MODE -- read keyboard switches for default         
-	EQUB 16,	%11101111,	%00000000		\\ NOBOOT
-	EQUB 11,	%11000111,	%00010000		\\ NOCAPS
-\\	EQUB 11,	%10111111,	%01000000		\\ NODIR	-- ADFS
-\\	EQUB 16,	%11110111,	%00001000		\\ NOSCROLL
-	EQUB 15,	%11111110,	%00000000		\\ NOTUBE
-	EQUB 15,	%00011111,	%00100000		\\ PRINT
-	EQUB 16,	%11111101,	%00000000		\\ QUIET
-	EQUB 13,	0,			8				\\ REPEAT
-\\	EQUB 16,	%11110111,	%00000000		\\ SCROLL
-	EQUB 11,	%11000111,	%00001000		\\ SHCAPS
-	EQUB 15,	%11111110,	%00000001		\\ TUBE
-	EQUB 0:		EQUW CMD_TV-1				\\ TV
-\\	EQUB 0:		EQUW CMD_FS-1				\\ FS		-- ANFS
-\\	EQUB 17,	%11111110,  %00000000		\\ NOSPACE	-- ANFS
-\\	EQUB 0:		EQUW CMD_PS-1				\\ PS		-- ANFS
-\\	EQUB 17,	%11111110,  %00000001		\\ SPACE	-- ANFS
-
 
 
 .CMD_Help							\\ List all commands from commandTable,X, with corresponding helpBase strings
@@ -139,16 +106,19 @@ ENDIF
 	JSR OSASCI
 .commandLoop
 	JSR OSASCI
+.commandLoopAlt
 	INX
 	LDA commandTable-1,X
 	BPL commandLoop
+	CMP #&FF
+	BEQ noHelpParam
 .helpParam
 	TAY
 	LDA #' '
 .paramLoop
 	JSR OSASCI
 	INY
-	BEQ noHelpParam
+	BEQ commandLoopAlt
 	LDA helpBase-1,Y
 	BNE paramLoop
 .noHelpParam
@@ -215,11 +185,11 @@ ENDIF
 .numLoop
 	STA TempSpace+2				\\ value so far
 	JSR GSREAD						\\ read digit
-	BCS endNum
+	BCS endNum2
 	CMP #'9'+1
-	BCS badNum
+	BCS endNum
 	SBC #'0'-1						\\ convert to number
-	BCC badNum
+	BCC endNum
 	TAX								\\ save for later
 	ASL TempSpace+2				\\ multiply previous result by 2
 	BCS badNum
@@ -240,7 +210,10 @@ ENDIF
 	CLC
 	RTS								\\ C is clear, Z set for blank, NZ for error
 .endNum
-	LDA TempSpace+2				\\ C is set
+	DEY								\\ reread non-digit
+	SEC
+.endNum2
+	LDA TempSpace+2
 	RTS
 .*CMD_ParseHex
 	CLC
@@ -345,198 +318,29 @@ ENDIF
 
 .CMD_Configure
 {
-	LDX #configTable - commandTable		\\ start searching for config term
-	JSR CMD_matchCommand
-	BEQ blankConfig						\\ no config term
-	BPL passConfig						\\ unrecognised config term
-	STY TempSpace						\\ save character pos
-	STA TempSpace+3						\\ save parameter description
-	LDA TempSpace+1					\\ load command index
-	ASL A
-	ADC TempSpace+1
-	STA TempSpace+1					\\ multiply index by 3
-	TAY
-	LDX configDataTable,Y				\\ NVRAM address
-	BEQ specialConfig					\\ jump to individual routine
-	LDA TempSpace+3						\\ load parameter type
-	CMP #&FF
-	BNE paramConfig						\\ config term with numeric parameter
-.simpleConfig
+	LDX #&28
+.serviceCall
 	CLC
-	JSR FRAM_readByte					\\ read NVRAM from address at X = configDataTable,Y
-	TYA
-	LDY TempSpace+1
-	AND configDataTable+1,Y				\\ NVRAM mask relevant bits
-	ORA configDataTable+2,Y				\\ setting
-	TAY
-	JSR FRAM_writeByte					\\ save new value
+	JSR GSINIT					\\ check for end of line
+	PHP							\\ save result
+	LDA #143
+	JSR OSBYTE					\\ issue service call &28 or &29 to roms
+	PLP
+	BEQ noParams				\\ if no config term, can't be an error
+	TXA							\\ X is zero if some rom dealt with it, NZ otherwise
+	BNE error
+.noParams
 	LDA #0
 	RTS
-.blankConfig
-	TYA
-	PHA									\\ save character position
-	LDX #configTable - commandTable
-	JSR CMD_Help						\\ list all config terms + help text
-	PLA
-	TAY
-	LDX #&28
-	LDA #143
-	JSR OSBYTE							\\ issue service call &28 to roms
-.passed
-	LDA #0
-	RTS
-.passConfig	
-	LDX #&28
-	LDA #143
-	JSR OSBYTE							\\ issue service call &28 to roms
-	TXA
-	BEQ passed
+.error
 	LDX #&FF
 	JSR CMD_doError
 	EQUS 254, "Bad config", 0
-.specialConfig
-	LDA configDataTable+2,Y				\\ address high
-	PHA
-	LDA configDataTable+1,Y				\\ address low
-	PHA
-	RTS
-.defaultConfig	
-	TXA									\\ configDataTable,index
-	BPL simpleConfig					\\ dont use keyboard switches
-	LDY TempSpace+1					\\ command index
-	LDA configDataTable+2,Y				\\ load switch mask
-	LDX #&09							\\ start scanning at switch 8/bit 0
-.keyScanLoop
-	LSR A
-	BCC skipKey
-	
-	LDY #&03    						;stop Auto scan
-	STY &FE40   						;by writing to system VIA
-	LDY #&7F    						;set port A to input on bit 7, output on bits 0 to 6
-	STY &FE43   						;
-	STX &FE4F   						;write X to Port A system VIA
-	LDX &FE4F   						;read back &80 if key pressed (M set)
-	LDY #&0B    						;select auto scan of keyboard
-	STY &FE40   						;tell VIA
 
-	CPX #&80							\\ set C to keyboard switch
-	BCS skipKey
-	ORA #&80							\\ switch off means bit = 1
-.skipKey
-	DEX
-	CPX #&1
-	BEQ doParam
-	CPX #&81
-	BEQ doParam
-	BNE keyScanLoop
-.paramConfig
-	LDY TempSpace						\\ get character pos
-	JSR CMD_ParseNum					\\ read numeric parameter
-	BCS doParam							\\ numeric parameter in A
-	BEQ defaultConfig					\\ no parameter, so use default
-	BNE badParam
-.doParam
-	STA TempSpace+2					\\ save it
-	LDY TempSpace+1					\\ command index
-	LDA configDataTable+1,Y				\\ load mask
-.shiftLoop
-	LSR A
-	BCC shifted
-	ASL TempSpace+2
-	BCC shiftLoop
-	BCS badParam
-.shifted
-	LDA configDataTable+1,Y				\\ reload mask
-	AND TempSpace+2					\\ check data size
-	BNE badParam
-	LDA configDataTable,Y
-	AND #&7F
-	TAX
-	CLC
-	JSR FRAM_readByte					\\ read NVRAM from address at X = configDataTable,Y
-	TYA
-	LDY TempSpace+1
-	AND configDataTable+1,Y				\\ NVRAM mask relevant bits
-	ORA TempSpace+2					\\ set value
-	TAY
-	JSR FRAM_writeByte					\\ save new value
-	LDA #0
-	RTS
-.^badParam
-	LDX TempSpace+3						\\ load parameter type
-	JSR CMD_doError
-	EQUS 252, "Bad parameter: expecting ", 0
-}	
-	
-.CMD_Baud
-{
-	LDY TempSpace						\\ get character pos
-	JSR CMD_ParseDec					\\ read numeric parameter
-	BNE notDefault						\\ not zero or blank
-	LDA #7								\\ defaul value
-	SEC
-.notDefault
-	BCC badParam
-	CMP #9
-	BCS badParam
-	SBC #0								\\ actually 1, but C is clear
-	ASL A
-	ASL A
-	STA TempSpace+2
-	LDX #15
-	CLC
-	JSR FRAM_readByte					\\ read NVRAM from address 15
-	TYA
-	AND #%11100011						\\ NVRAM mask relevant bits
-	ORA TempSpace+2						\\ set value
-	TAY
-	JSR FRAM_writeByte					\\ save new value
-	LDA #0
-	RTS
-}	
-
-.CMD_TV
-{
-	LDY TempSpace						\\ get character pos
-	JSR CMD_ParseDec					\\ read numeric parameter
-	BCS doVertical
-	BNE badParam
-	LDA #0								\\ default vertical offset
-.doVertical
-	CMP #4
-	BCC vertOK
-	CMP #252
-	BCC badParam
-.vertOK
-	ASL A
-	STA TempSpace+1
-	JSR CMD_ParseDec					\\ read numeric parameter
-	BCS doInterlace
-	BNE badParam
-	LDA #0								\\ default interlace
-.doInterlace
-	CMP #2
-	BCS badParam
-	ORA TempSpace+1
-	ASL A
-	ASL A
-	ASL A
-	ASL A
-	STA TempSpace+1
-	LDX #10
-	CLC
-	JSR FRAM_readByte					\\ read NVRAM from address 15
-	TYA
-	AND #%00001111						\\ NVRAM mask relevant bits
-	ORA TempSpace+1						\\ set value
-	TAY
-	JSR FRAM_writeByte					\\ save new value
-	LDA #0
-	RTS
+.*CMD_Status
+	LDX #&29
+	BNE serviceCall
 }
-
-
-.CMD_Status
 
 .CMD_Roms
 

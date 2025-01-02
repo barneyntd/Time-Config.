@@ -1,0 +1,320 @@
+EconetIDreg			= &FE18
+
+
+.CON_DataTable
+	EQUB 0:		EQUW CON_Baud-1				\\ BAUD
+.bootIndex
+	EQUB 16,	%11101111,	%00010000		\\ BOOT -- read keyboard switches for default
+	EQUB 16,	%11101111,	%00000000		\\ NOBOOT
+	EQUB 11,	%11000111,	%00100000		\\ CAPS
+	EQUB 11,	%11000111,	%00010000		\\ NOCAPS
+	EQUB 11,	%11000111,	%00001000		\\ SHCAPS
+	EQUB 16,	%00011111,	%10100000		\\ DATA
+	EQUB 12,	0,			50				\\ DELAY
+.fdriveIndex
+	EQUB 11+&80, %11111000,	%00110000		\\ FDRIVE -- read keyboard switches for default
+	EQUB 5,		%11110000,	%00001111		\\ FILE
+	EQUB 14,	0,			&0				\\ IGNORE
+	EQUB 5,		%00001111,	%11110000		\\ LANG
+	EQUB 16,	%11111101,	%00000010		\\ LOUD
+	EQUB 16,	%11111101,	%00000000		\\ QUIET
+.modeIndex
+	EQUB 10+&80, %11111000,	%00000111		\\ MODE -- read keyboard switches for default         
+	EQUB 15,	%11111110,	%00000001		\\ TUBE
+	EQUB 15,	%11111110,	%00000000		\\ NOTUBE
+	EQUB 15,	%00011111,	%00100000		\\ PRINT
+	EQUB 13,	0,			8				\\ REPEAT
+	EQUB 0:		EQUW CON_TV-1				\\ TV
+\\	EQUB 16,	%11111011,	%00000000		\\ INTUBE
+\\	EQUB 16,	%11111011,	%00000100		\\ EXTUBE
+\\	EQUB 16,	%11110111,	%00000000		\\ SCROLL
+\\	EQUB 16,	%11110111,	%00001000		\\ NOSCROLL
+\\	EQUB 11,	%10111111,	%00000000		\\ DIR		-- ADFS
+\\	EQUB 11,	%10111111,	%01000000		\\ NODIR	-- ADFS
+\\	EQUB 11,	%01111111,	%10000000		\\ FLOPPY	-- ADFS
+\\	EQUB 11,	%01111111,	%00000000		\\ HARD		-- ADFS
+\\	EQUB 0:		EQUW CON_FS-1				\\ FS		-- ANFS
+\\	EQUB 0:		EQUW CON_PS-1				\\ PS		-- ANFS
+\\	EQUB 17,	%11111110,  %00000001		\\ SPACE	-- ANFS
+\\	EQUB 17,	%11111110,  %00000000		\\ NOSPACE	-- ANFS
+
+.CON_DefaultsTable
+\\	EQUB &FE				\\ address 1: FS station
+\\	EQUB 0					\\ address 2: FS network
+\\	EQUB &EB				\\ address 3: PS station
+\\	EQUB 0					\\ address 4: PS network
+	EQUB %11111111			\\ address 5: FILE & LANG
+	EQUB %11111111			\\ address 6: ROM 0-7
+	EQUB %11111111			\\ address 7: ROM 8-F
+	EQUB 0					\\ address 8: EDIT settings
+	EQUB 0					\\ address 9: Telecom settings
+	EQUB %00000111			\\ address 10: MODE & TV
+	EQUB %11100111			\\ address 11: FDRIVE & CAPS
+	EQUB 50					\\ address 12: DELAY
+	EQUB 8					\\ address 13: REPEAT
+	EQUB 0					\\ address 14: IGNORE
+	EQUB %00111000			\\ address 15: TUBE, BAUD & PRINT
+	EQUB %10100010			\\ address 16: LOUD, BOOT & DATA
+\\	EQUB 0					\\ address 17: ANFS settings
+
+CON_Defaults = P% - 17
+
+.CON_Reset
+{
+	LDX #5
+	CLC
+.resetLoop
+	LDY CON_Defaults,X
+	JSR FRAM_writeByte
+	INX
+	CPX #17
+	BCC resetLoop
+	LDY #bootIndex - CON_DataTable		\\ index of BOOT
+	STY TempSpace+1
+	LDA #%00001000						\\ BOOT switchmask
+	JSR keyswitchConfig
+	LDY #fdriveIndex - CON_DataTable	\\ index of FDRIVE
+	STY TempSpace+1
+	LDA #%00110000						\\ FDRIVE switchmask
+	JSR keyswitchConfig
+	LDY #modeIndex - CON_DataTable		\\ index of MODE
+	STY TempSpace+1
+	LDA #%00000111						\\ MODE switchmask
+	JSR keyswitchConfig
+	LDY EconetIDreg						\\ read econet ID jumpers
+	LDX #0
+	JSR FRAM_writeByte
+	RTS
+}
+
+.CON_Configure
+{
+	LDX #configTable - commandTable		\\ start searching for config term
+	JSR CMD_matchCommand
+	BEQ blankConfig						\\ no config term
+	BPL passConfig						\\ unrecognised config term
+	STY TempSpace						\\ save character pos
+	STA TempSpace+3						\\ save parameter description
+	LDA TempSpace+1						\\ load command index
+	ASL A
+	ADC TempSpace+1
+	STA TempSpace+1						\\ multiply index by 3
+	TAY
+	LDX CON_DataTable,Y					\\ NVRAM address
+	BEQ specialConfig					\\ jump to individual routine
+	LDA TempSpace+3						\\ load parameter type
+	CMP #helpAlt - helpBase
+	BCC paramConfig						\\ config term with numeric parameter
+.simpleConfig
+	CLC
+	JSR FRAM_readByte					\\ read NVRAM from address at X = configDataTable,Y
+	TYA
+	LDY TempSpace+1
+	AND CON_DataTable+1,Y				\\ NVRAM mask relevant bits
+	ORA CON_DataTable+2,Y				\\ setting
+	TAY
+	JSR FRAM_writeByte					\\ save new value
+	LDA #0
+	RTS
+.blankConfig
+	TYA
+	PHA									\\ save character position
+	LDX #configTable - commandTable
+	JSR CMD_Help						\\ list all config terms + help text
+	PLA
+	TAY
+.passConfig
+	LDA #&28							\\ let the rest of the ROMs try
+	RTS
+.specialConfig
+	LDA CON_DataTable+2,Y				\\ address high
+	PHA
+	LDA CON_DataTable+1,Y				\\ address low
+	PHA
+	RTS
+.defaultConfig	
+	TXA									\\ configDataTable,index
+	BPL simpleConfig					\\ dont use keyboard switches
+	LDY TempSpace+1						\\ command index
+	LDA CON_DataTable+2,Y				\\ load switch mask
+.^keyswitchConfig
+	LDX #&09							\\ start scanning at switch 8/bit 0
+.keyScanLoop
+	LSR A
+	BCC skipKey
+	
+	LDY #&03    						;stop Auto scan
+	STY &FE40   						;by writing to system VIA
+	LDY #&7F    						;set port A to input on bit 7, output on bits 0 to 6
+	STY &FE43   						;
+	STX &FE4F   						;write X to Port A system VIA
+	LDX &FE4F   						;read back &80 if key pressed (M set)
+	LDY #&0B    						;select auto scan of keyboard
+	STY &FE40   						;tell VIA
+
+	CPX #&80							\\ set C to keyboard switch
+	BCS skipKey
+	ORA #&80							\\ switch off means bit = 1
+.skipKey
+	DEX
+	CPX #&1
+	BEQ doParam
+	CPX #&81
+	BEQ doParam
+	BNE keyScanLoop
+.paramConfig
+	LDY TempSpace						\\ get character pos
+	JSR CMD_ParseNum					\\ read numeric parameter
+	BCS doParam							\\ numeric parameter in A
+	BEQ defaultConfig					\\ no parameter, so use default
+	BNE badParam
+.doParam
+	STA TempSpace+2					\\ save it
+	LDY TempSpace+1					\\ command index
+	LDA CON_DataTable+1,Y				\\ load mask
+.shiftLoop
+	LSR A
+	BCC shifted
+	ASL TempSpace+2
+	BCC shiftLoop
+	BCS badParam
+.shifted
+	LDA CON_DataTable+1,Y				\\ reload mask
+	AND TempSpace+2					\\ check data size
+	BNE badParam
+	LDA CON_DataTable,Y
+	AND #&7F
+	TAX
+	CLC
+	JSR FRAM_readByte					\\ read NVRAM from address at X = configDataTable,Y
+	TYA
+	LDY TempSpace+1
+	AND CON_DataTable+1,Y				\\ NVRAM mask relevant bits
+	ORA TempSpace+2					\\ set value
+	TAY
+	JSR FRAM_writeByte					\\ save new value
+	LDA #0
+	RTS
+.^badParam
+	LDX TempSpace+3						\\ load parameter type
+	JSR CMD_doError
+	EQUS 252, "Bad parameter: expecting ", 0
+}	
+	
+.CON_Baud
+{
+	LDY TempSpace						\\ get character pos
+	JSR CMD_ParseDec					\\ read numeric parameter
+	BNE notDefault						\\ not zero or blank
+	LDA #7								\\ defaul value
+	SEC
+.notDefault
+	BCC badParam
+	CMP #9
+	BCS badParam
+	SBC #0								\\ actually 1, but C is clear
+	ASL A
+	ASL A
+	STA TempSpace+2
+	LDX #15
+	CLC
+	JSR FRAM_readByte					\\ read NVRAM from address 15
+	TYA
+	AND #%11100011						\\ NVRAM mask relevant bits
+	ORA TempSpace+2						\\ set value
+	TAY
+	JSR FRAM_writeByte					\\ save new value
+	LDA #0
+	RTS
+}	
+
+.CON_TV
+{
+	LDY TempSpace						\\ get character pos
+	JSR CMD_ParseDec					\\ read numeric parameter
+	BCS doVertical
+	BNE badParam
+	LDA #0								\\ default vertical offset
+.doVertical
+	CMP #4
+	BCC vertOK
+	CMP #252
+	BCC badParam
+.vertOK
+	ASL A
+	STA TempSpace+1
+	CLC
+	JSR GSINIT						\\ skip spaces
+	BEQ noInterlace					\\ nothing here
+	CMP #','							\\ check for comma
+	BNE badParam
+	INY
+	JSR CMD_ParseDec					\\ read numeric parameter
+	BCS doInterlace
+	BNE badParam
+.noInterlace
+	LDA #0								\\ default interlace
+.doInterlace
+	CMP #2
+	BCS badParam
+	ORA TempSpace+1
+	ASL A
+	ASL A
+	ASL A
+	ASL A
+	STA TempSpace+1
+	LDX #10
+	CLC
+	JSR FRAM_readByte					\\ read NVRAM from address 15
+	TYA
+	AND #%00001111						\\ NVRAM mask relevant bits
+	ORA TempSpace+1						\\ set value
+	TAY
+	JSR FRAM_writeByte					\\ save new value
+	LDA #0
+	RTS
+}
+
+.CON_Status
+{
+	LDX #configTable - commandTable		\\ start searching for config term
+	JSR CMD_matchCommand
+	BEQ blankStatus						\\ no config term
+	BPL passStatus						\\ unrecognised config term
+	STY TempSpace						\\ save character pos
+	STA TempSpace+3						\\ save parameter description
+	LDA TempSpace+1						\\ load command index
+	ASL A
+	ADC TempSpace+1
+	STA TempSpace+1						\\ multiply index by 3
+	TAY
+	LDX CON_DataTable,Y					\\ NVRAM address
+	BEQ specialStatus					\\ jump to individual routine
+	LDA TempSpace+3						\\ load parameter type
+	CMP #&FF
+	BNE paramStatus						\\ config term with numeric parameter
+.simpleStatus
+	CLC
+	JSR FRAM_readByte					\\ read NVRAM from address at X = configDataTable,Y
+	TYA
+	LDY TempSpace+1
+	ORA CON_DataTable+1,Y				\\ NVRAM mask relevant bits
+	EOR CON_DataTable+1,Y				\\ NVRAM mask relevant bits
+.checkNext
+	CMP CON_DataTable+2,Y				\\ check setting
+	BEQ foundStatus
+	INY
+	INY
+	INY
+	BNE checkNext
+.foundStatus
+	
+.blankStatus
+
+.passStatus
+.specialStatus
+.paramStatus
+	RTS
+}	
+
+
