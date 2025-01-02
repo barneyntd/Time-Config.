@@ -112,6 +112,11 @@ ORG &8000
 \														\
 \*******************************************************\
 
+.timeStr
+	EQUS "Timestrings",0
+.timeZone
+	EQUS "Timezones",0
+
 .Help
 {
 	TYA
@@ -127,11 +132,20 @@ ORG &8000
 	JSR CMD_Help				\\ print list of commands & parameters
 	JMP doneHelp
 .notTChelp
-	DEX
-	BNE notTIMESTRhelp
+	LDY #&FF
+	LDA #' '
+	JSR OSASCI					\\ print two spaces
+.timeStrLoop
+	JSR OSASCI					\\ print "Timestrings"
+	INY
+	LDA timeStr,Y
+	BNE timeStrLoop
+	JSR OSNEWL					\\ print newline
 	LDX #&FF
 .helpLoop1
 	LDA #' '
+	JSR OSASCI
+	JSR OSASCI
 	JSR OSASCI
 .helpLoop
 	JSR OSASCI
@@ -141,15 +155,16 @@ ORG &8000
 	JSR OSNEWL
 	LDA timestr1+1,X
 	BNE helpLoop1
-	BEQ doneHelp
-.notTIMESTRhelp
-	DEX
-	BNE notTIMEZONEhelp
+	LDY #&FF
+	LDA #' '
+	JSR OSASCI					\\ print two spaces
+.timeZoneLoop
+	JSR OSASCI					\\ print "Timezones"
+	INY
+	LDA timeZone,Y
+	BNE timeZoneLoop
+	JSR OSNEWL					\\ print newline
 	JSR RTC_ListZones			\\ print list of timezones
-	JMP doneHelp
-.notTIMEZONEhelp
-	LDX #configTable-commandTable
-	JSR CMD_Help				\\ print list of configurations & parameters
 	JMP doneHelp
 .noHelpTerm
 	JSR helpHeading

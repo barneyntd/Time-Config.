@@ -87,9 +87,7 @@ ENDIF
 
 .helpTable
 	EQUS "T&C",&FF
-	EQUS "TIMESTR",&FF
-	EQUS "TIMEZONES",&FF
-	EQUS "CONFIGURE",&FF
+	EQUS "TIME",&FF
 	EQUB 0
 	
 IF P% - commandTable > &FF
