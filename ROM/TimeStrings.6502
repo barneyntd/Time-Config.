@@ -21,25 +21,21 @@ BSTCount = (P% - RTC_BSTString)/3
 	EQUS " = UTC",0
 
 .RTC_ListZones
+{
 	LDY #0						\\ Y is index through BSTString
 	STY TempSpace				\\ TempSpace is index through BSTOffset
 .listLoop
-	LDX #8
-	LDA #' '					\\ print eight spaces
-.spcLoop
-	JSR OSASCI
-	DEX
-	BNE spcLoop
+	JSR fourSpaces
 	LDX #3
 .firstLoop
 	LDA RTC_BSTString,Y			\\ print character from TLA
-	JSR OSASCI
+	JSR OSWRCH
 	INY
 	DEX
 	BNE firstLoop
 	LDA RTC_ListZoneString
 .secondLoop
-	JSR OSASCI					\\ print character from format string
+	JSR OSWRCH					\\ print character from format string
 	INX
 	LDA RTC_ListZoneString,X
 	BNE secondLoop
@@ -47,14 +43,14 @@ BSTCount = (P% - RTC_BSTString)/3
 	LDA RTC_BSTOffset,X
 	BPL offsetNotNeg
 	LDA #'-'
-	JSR OSASCI
+	JSR OSWRCH
 	LDA #&9A					\\ mangled BCD 100
 	SEC
 	SBC RTC_BSTOffset,X			\\ negate offset
 	BNE printOffset
 .offsetNotNeg
 	LDA #'+'
-	JSR OSASCI
+	JSR OSWRCH
 	LDA RTC_BSTOffset,X
 .printOffset
 	PHA
@@ -64,17 +60,28 @@ BSTCount = (P% - RTC_BSTString)/3
 	LSR A
 	CLC
 	ADC #'0'					\\ print first digit
-	JSR OSASCI
+	JSR OSWRCH
 	PLA
 	AND #&0F
 	CLC
 	ADC #'0'					\\ print second digit
-	JSR OSASCI
+	JSR OSWRCH
+	JSR fourSpaces
 	INC TempSpace
 	CPY #BSTCount*3
 	BNE listLoop
 	JSR OSNEWL
 	RTS
+	
+.fourSpaces
+	LDX #4
+	LDA #' '					\\ print four spaces
+.spcLoop
+	JSR OSWRCH
+	DEX
+	BNE spcLoop
+	RTS
+}
 
 \*******************************************************\
 \														\
@@ -82,7 +89,7 @@ BSTCount = (P% - RTC_BSTString)/3
 \														\
 \*******************************************************\
 
-.RTC_OutputText				\\ Save a character to (OSWORDPtr)+Y, or send it to OSWRCH
+.RTC_OutputText				\\ Save a character to (OSWORDPtr)+Y, or send it to OSASCI
 	PHA
 	LDA OSWORDPtr+1			\\ check output buffer
 	BEQ printit				\\ if zero, print instead
@@ -136,7 +143,7 @@ BSTCount = (P% - RTC_BSTString)/3
 	
 .RTC_readTimeString			\\ Read date & time from RTC & convert to string
 	JSR RTC_readTime
-.RTC_TimetoText				\\ convert time in TempSpace to string in (OSWORDPtr),Y or OSWRCH
+.RTC_TimetoText				\\ convert time in TempSpace to string in (OSWORDPtr),Y or OSASCI
 	LDY #0
 	LDA TempWkday			\\ weekday
 	CLC

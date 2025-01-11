@@ -34,7 +34,7 @@
 \\.helpSid
 \\	EQUS "(<0-127>.)<0-255>",0
 .helpAlt
-	EQUS "/ ",0								\\ must be last
+	EQUS " /",0								\\ must be last
 
 helpBase = P% - &100
 IF timestr1 < helpBase OR helpTime - helpBase < &80
@@ -47,7 +47,7 @@ ENDIF
 	EQUS "STATUS", helpConf - helpBase
 	EQUS "UNPLUG", helpRom - helpBase
 	EQUS "INSERT", helpRom - helpBase
-	EQUS "PROMS", &FF
+	EQUS "ROMS", &FF
 	EQUB 0
 
 .configTable
@@ -98,25 +98,30 @@ ENDIF
 	EQUW CMD_Time-1, CMD_Configure-1, CMD_Status-1, CMD_Unplug-1, CMD_Insert-1, CMD_Roms-1
 
 
-.CMD_Help							\\ List all commands from commandTable,X, with corresponding helpBase strings
+.CMD_printTerm
 {
 	LDA #' '
-	JSR OSASCI
-.commandLoop
-	JSR OSASCI
-.commandLoopAlt
+	JSR OSWRCH
+.printLoop
+	JSR OSWRCH
 	INX
 	LDA commandTable-1,X
-	BPL commandLoop
+	BPL printLoop
+	RTS
+}
+
+.CMD_Help							\\ List all commands from commandTable,X, with corresponding helpBase strings
+{
+	JSR CMD_printTerm
 	CMP #&FF
 	BEQ noHelpParam
 .helpParam
 	TAY
 	LDA #' '
 .paramLoop
-	JSR OSASCI
+	JSR OSWRCH
 	INY
-	BEQ commandLoopAlt
+	BEQ CMD_Help
 	LDA helpBase-1,Y
 	BNE paramLoop
 .noHelpParam
@@ -128,7 +133,8 @@ ENDIF
 
 
 .CMD_matchCommand					\\ Search for the word at (TextPointer),Y from commandTable,X
-									\\ return with A = CommandTable,X & TempSpace+1 = index for match, Z set for blank, N clear for no match
+									\\ return with A = CommandTable,X & TempSpace+1 = index for match, TempSpace+2 = start of matched term, N set for match
+									\\ N clear & A = 4 for no match, Z set for blank
 {
 	LDA #0
 	STA TempSpace+1				\\ save table index
@@ -137,6 +143,8 @@ ENDIF
 	BEQ blankCommand
 	STY TempSpace					\\ save start of word
 .wordLoop
+	STX TempSpace+2
+.matchLoop
 	JSR GSREAD						\\ next character
 	BCS endWord						\\ end of word
 	CMP #'.'
@@ -145,7 +153,7 @@ ENDIF
 	AND #LO(NOT(&20))				\\ capitalise
 	BNE notMatch
 	INX
-	BNE wordLoop
+	BNE matchLoop
 .endWord
 	LDA commandTable,X				\\ check for end of word in table
 	BPL skipLoop2					\\ no match
@@ -168,70 +176,6 @@ ENDIF
 	BNE wordLoop
 	LDA #4
 .blankCommand
-	RTS
-}
-
-.CMD_ParseNum
-{
-	CMP #helpRom - helpBase
-	BEQ CMD_ParseHex
-.*CMD_ParseDec
-	CLC
-	JSR GSINIT						\\ skip spaces
-	BEQ blankNum					\\ nothing here
-	LDA #0
-.numLoop
-	STA TempSpace+2				\\ value so far
-	JSR GSREAD						\\ read digit
-	BCS endNum2
-	CMP #'9'+1
-	BCS endNum
-	SBC #'0'-1						\\ convert to number
-	BCC endNum
-	TAX								\\ save for later
-	ASL TempSpace+2				\\ multiply previous result by 2
-	BCS badNum
-	LDA TempSpace+2
-	ASL A							\\ result times 4
-	BCS badNum
-	ASL A							\\ result times 8
-	BCS badNum
-	ADC TempSpace+2				\\ result times 10
-	BCS badNum
-	STA TempSpace+2
-	TXA								\\ new digit value
-	ADC TempSpace+2				\\ new total value
-	BCC numLoop
-.badNum
-	LDA #&FF
-.blankNum
-	CLC
-	RTS								\\ C is clear, Z set for blank, NZ for error
-.endNum
-	DEY								\\ reread non-digit
-	SEC
-.endNum2
-	LDA TempSpace+2
-	RTS
-.*CMD_ParseHex
-	CLC
-	JSR GSINIT						\\ skip spaces
-	BEQ blankNum					\\ nothing here
-	JSR GSREAD						\\ read digit
-	SEC
-	SBC #'0'
-	BCC badNum
-	CMP #10
-	BCC goodNum
-	SBC #'A'-'0'-10
-	CMP #10
-	BCC badNum
-	CMP #16
-	BCS badNum
-.goodNum
-	TAX
-	JSR GSREAD						\\ C is clear if more characters
-	TXA
 	RTS
 }
 
@@ -340,12 +284,6 @@ ENDIF
 	BNE serviceCall
 }
 
-.CMD_Roms
-
-.CMD_Unplug
-
-.CMD_Insert
-	RTS
 
 
 

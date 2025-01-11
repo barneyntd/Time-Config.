@@ -5,6 +5,7 @@ OSBYTEA		= &EF
 OSBYTEX		= &F0
 OSBYTEY		= &F1
 TextPointer	= &F2
+ReadRomPtr	= &F6
 TempSpace	= &A8		\\ A8 - AF supposed to be usable for OS commands
 TempSpace2	= &E4		\\ E4 - E6 general purpose, used by GSINIT/GSREAD
 OSBYTE		= &FFF4
@@ -14,6 +15,9 @@ OSWRCH		= &FFEE
 OSNEWL		= &FFE7
 GSREAD		= &FFC5
 GSINIT		= &FFC2
+OSRDRM		= &FFB9
+OS_RomTable	= &02A1
+OS_ROMNum	= &F4
 
 SAVE_SETTIME = 1		\\ save date & time of last set in UTC
 CALIBRATION = 1			\\ implement C+-cc to adjust offset register
@@ -29,9 +33,9 @@ ORG &8000
 \														\
 \*******************************************************\
 
-	EQUB 0,0,0						\\ not a language
+	JMP SET_defaultLang				\\ pretend to be a language
 	JMP ROM_service
-	EQUB &82						\\ 6502 code, no relocation, not a language, service
+	EQUB %11000010					\\ 6502 code, no relocation, language, service
 	EQUB ROM_copyright - codeStart - 1
 	EQUB 02							\\ version 02
 .ROM_title
@@ -39,17 +43,24 @@ ORG &8000
 .ROM_version
 	EQUS "0.02", 0					\\ Version
 .ROM_copyright
-	EQUS "(C) 2024 Barney Hilken", 0
+	EQUS "(C) 2025 Barney Hilken", 0
 	EQUD 0
 
 .ROM_service
 {
+	CMP #&FF
+	BNE notTube
+	JMP SET_TubeControl
+.notTube
 	CMP #1
 	BNE notSetup
 	JSR VIA_setup			\\ Setup after reset
-	LDA #1
-	RTS
+	JMP SET_Startup
 .notSetup
+	CMP #3
+	BNE notDefaultFS
+	JMP SET_defaultFS
+.notDefaultFS
 	CMP #4
 	BNE notCommand
 	JMP CMD_Command			\\ perform OSCLI command
@@ -93,15 +104,15 @@ ORG &8000
 .notOSWORD
 	CMP #9
 	BNE notHelp
-	JMP Help
+	JMP Help				\\ perform *HELP
 .notHelp
 	CMP #&28
 	BNE notUnKnConf
-	JMP CON_Configure
+	JMP CON_Configure		\\ perform CONFIGURE service
 .notUnKnConf
 	CMP #&29
 	BNE notUnKnStat
-	JMP CON_Status
+	JMP CON_Status			\\ perform STATUS service
 .notUnKnStat
 	RTS
 }
@@ -111,11 +122,6 @@ ORG &8000
 \				*HELP									\
 \														\
 \*******************************************************\
-
-.timeStr
-	EQUS "Timestrings",0
-.timeZone
-	EQUS "Timezones",0
 
 .Help
 {
@@ -132,38 +138,24 @@ ORG &8000
 	JSR CMD_Help				\\ print list of commands & parameters
 	JMP doneHelp
 .notTChelp
-	LDY #&FF
-	LDA #' '
-	JSR OSASCI					\\ print two spaces
-.timeStrLoop
-	JSR OSASCI					\\ print "Timestrings"
-	INY
-	LDA timeStr,Y
-	BNE timeStrLoop
-	JSR OSNEWL					\\ print newline
+	JSR STR_PrintString
+	EQUS "  Timestrings",13,0
 	LDX #&FF
 .helpLoop1
 	LDA #' '
-	JSR OSASCI
-	JSR OSASCI
-	JSR OSASCI
+	JSR OSWRCH
+	JSR OSWRCH
+	JSR OSWRCH
 .helpLoop
-	JSR OSASCI
+	JSR OSWRCH
 	INX
 	LDA timestr1,X
 	BNE helpLoop
 	JSR OSNEWL
 	LDA timestr1+1,X
 	BNE helpLoop1
-	LDY #&FF
-	LDA #' '
-	JSR OSASCI					\\ print two spaces
-.timeZoneLoop
-	JSR OSASCI					\\ print "Timezones"
-	INY
-	LDA timeZone,Y
-	BNE timeZoneLoop
-	JSR OSNEWL					\\ print newline
+	JSR STR_PrintString
+	EQUS "  Timezones",13,0
 	JSR RTC_ListZones			\\ print list of timezones
 	JMP doneHelp
 .noHelpTerm
@@ -181,13 +173,13 @@ ORG &8000
 	LDY #0
 	LDA ROM_title,Y
 .titleLoop
-	JSR OSASCI					\\ print rom title
+	JSR OSWRCH					\\ print rom title
 	INY
 	LDA ROM_title,Y
 	BNE titleLoop
 	LDA #' '
 .versionLoop
-	JSR OSASCI					\\ print rom version
+	JSR OSWRCH					\\ print rom version
 	INY
 	LDA ROM_title,Y
 	BNE versionLoop
@@ -285,6 +277,9 @@ INCLUDE "Time.6502"
 INCLUDE "TimeStrings.6502"
 INCLUDE "Commands.6502"
 INCLUDE "Configure.6502"
+INCLUDE "Strings.6502"
+INCLUDE "Roms.6502"
+INCLUDE "Settings.6502"
 IF SAVE_SETTIME
 	INCLUDE "SaveTimes.6502"
 ENDIF
