@@ -23,7 +23,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		B380B2012B9A3DF50091687A /* sntpos server */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "sntpos server"; sourceTree = BUILT_PRODUCTS_DIR; };
+		B380B2012B9A3DF50091687A /* sntpos_server */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = sntpos_server; sourceTree = BUILT_PRODUCTS_DIR; };
 		B380B20D2B9A3E190091687A /* main.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -49,7 +49,7 @@
 		B380B2022B9A3DF50091687A /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				B380B2012B9A3DF50091687A /* sntpos server */,
+				B380B2012B9A3DF50091687A /* sntpos_server */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -65,9 +65,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		B380B2002B9A3DF50091687A /* sntpos server */ = {
+		B380B2002B9A3DF50091687A /* sntpos_server */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = B380B2082B9A3DF50091687A /* Build configuration list for PBXNativeTarget "sntpos server" */;
+			buildConfigurationList = B380B2082B9A3DF50091687A /* Build configuration list for PBXNativeTarget "sntpos_server" */;
 			buildPhases = (
 				B380B1FD2B9A3DF50091687A /* Sources */,
 				B380B1FE2B9A3DF50091687A /* Frameworks */,
@@ -77,9 +77,9 @@
 			);
 			dependencies = (
 			);
-			name = "sntpos server";
+			name = sntpos_server;
 			productName = "sntpos server";
-			productReference = B380B2012B9A3DF50091687A /* sntpos server */;
+			productReference = B380B2012B9A3DF50091687A /* sntpos_server */;
 			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
@@ -95,7 +95,7 @@
 					};
 				};
 			};
-			buildConfigurationList = B380B1FC2B9A3DF50091687A /* Build configuration list for PBXProject "sntpos server" */;
+			buildConfigurationList = B380B1FC2B9A3DF50091687A /* Build configuration list for PBXProject "sntpos_server" */;
 			compatibilityVersion = "Xcode 9.3";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -108,7 +108,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				B380B2002B9A3DF50091687A /* sntpos server */,
+				B380B2002B9A3DF50091687A /* sntpos_server */,
 			);
 		};
 /* End PBXProject section */
@@ -255,7 +255,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		B380B1FC2B9A3DF50091687A /* Build configuration list for PBXProject "sntpos server" */ = {
+		B380B1FC2B9A3DF50091687A /* Build configuration list for PBXProject "sntpos_server" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B380B2062B9A3DF50091687A /* Debug */,
@@ -264,7 +264,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B380B2082B9A3DF50091687A /* Build configuration list for PBXNativeTarget "sntpos server" */ = {
+		B380B2082B9A3DF50091687A /* Build configuration list for PBXNativeTarget "sntpos_server" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B380B2092B9A3DF50091687A /* Debug */,

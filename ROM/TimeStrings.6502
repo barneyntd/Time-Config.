@@ -583,8 +583,8 @@ ENDIF
 	RTS
 
 IF CALIBRATION
-.RTC_ParseTuningOffset		\\ parse string of the form T+tt or T-tt
-	LDA (OSWORDPtr),Y		\\ check for 'T'
+.RTC_ParseTuningOffset		\\ parse string of the form C+tt or C-tt
+	LDA (OSWORDPtr),Y		\\ check for 'C'
 	AND #LO(NOT(&20))		\\ ignore capitalisation
 	CMP #'C'
 	BNE noMatch2

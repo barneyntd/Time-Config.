@@ -302,3 +302,5 @@ ENDIF
 
 PRINT "Code size ", codeEnd - codeStart, "bytes"
 SAVE "TnC", codeStart, codeEnd, VIA_setup
+PUTBASIC "../sntp/SNTPoS.bas", "SNTPoS"
+
