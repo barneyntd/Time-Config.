@@ -30,6 +30,7 @@ TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
 
 
 .RTC_readTime				\\ Read date & time from RTC & correct using flags
+{
 	LDA #RTC_TD_sec			\\ seconds register
 	LDX #7					\\ seconds, minutes, hours, days, weekdays, months, years
 	LDY #0
@@ -96,7 +97,7 @@ TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
 	PLA						\\ flags
 .clearFLYandSave
 	AND #LO(NOT(NVR_Flags_FLY))	\\ clear FLY flag
-.saveFlags
+.^saveFlags
 	TAY
 .noDayInc
 	LDX #NVR_Flags
@@ -106,7 +107,7 @@ TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
 	TYA						\\ flags
 	BPL checkCentury		\\ NVR_Flags_8099 clear
 	RTS
-.checkCentury
+.^checkCentury
 	LDA TempCentury			\\ century
 	AND #&13
 	CMP #&03				\\ ends in 03 or 07
@@ -120,7 +121,7 @@ TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
 	TYA						\\ flags
 	ORA #NVR_Flags_8099		\\ set 80-99 flag
 	BNE clearFLYandSave		\\ clear FLY flag, save flags in NVRAM and return
-
+}
 
 
 
@@ -131,6 +132,7 @@ TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
 \*******************************************************\
 
 .RTC_setTimeOnly			\\ set time from string in format hh:mm:ss in (OSWORDPtr),Y
+{
 	JSR RTC_ParseTime
 	BCC badString			\\ no match
 	LDA #RTC_TD_sec
@@ -148,10 +150,12 @@ IF SAVE_SETTIME
 	JSR RTC_saveSetTime
 ENDIF
 	SEC						\\ no error
-.badString
+.^badString
 	RTS						\\ carry is clear
+}
 	
 .RTC_setDateOnly			\\ set date from string in format www,dd mmm yyyy in (OSWORDPtr),Y
+{
 	JSR RTC_ParseDate
 	BCC badString
 	LDA #RTC_TD_day
@@ -168,8 +172,10 @@ IF SAVE_SETTIME
 ENDIF
 	SEC
 	RTS
+}
 
 .RTC_setDateTime			\\ set date & time from string in format www,dd mmm yyyy.hh:mm:ss in (OSWORDPtr),Y
+{
 	JSR RTC_ParseDate
 	BCC badString
 	LDA #'.'
@@ -188,14 +194,15 @@ IF SAVE_SETTIME
 ENDIF
 	SEC
 	RTS
+}
 
 .RTC_setCentury				\\ set century from contents of TempSpace+7 & flags from date in TempSpace
 	LDY TempCentury			\\ Century
 	LDX #NVR_Century		\\ address to store it
 	SEC
 	JSR FRAM_writeByte		\\ save century
-
 .RTC_setFlags				\\ set flags according to date in TempSpace
+{
 	LDX #NVR_Flags
 	SEC
 	JSR FRAM_readByte		\\ look up flags; result in Y
@@ -221,7 +228,7 @@ ENDIF
 	TYA
 	AND #LO(NOT(NVR_Flags_8099 OR NVR_Flags_FLY))	\\ clear both flags
 	JMP saveFlags			\\ save flags and return
-
+}
 
 \*******************************************************\
 \														\
@@ -230,12 +237,14 @@ ENDIF
 \*******************************************************\
 
 .RTC_setTimeZone			\\ adjust time depending on string UTC+hh or UTC-hh
+{
 	JSR RTC_ParseTimeZone
 	JMP doSetBSTZone
-	
+}	
 .RTC_setBSTZone				\\ adjust time depending on TLA in (OSWORDPtr),Y
+{
 	JSR RTC_ParseBST		\\ parse new offset
-.doSetBSTZone
+.^doSetBSTZone
 	BCC noChange			\\ not recognised
 	PHA						\\ save temporarily
 	LDX #NVR_HourOffset
@@ -263,21 +272,36 @@ ENDIF
 	LDY #0
 	JSR RTC_sendBytes		\\ save updated date & time from TempSpace
 	JMP RTC_setCentury		\\ save century and flags
-.noChange
+.^noChange
 	RTS
+}
 	
 .RTC_incSeconds				\\ adjust time depending on string S+ss.cc or S-ss.cc
+{
 	JSR RTC_ParseInc
 	BCC noChange			\\ not recognised
+	STA TempSpace2+2
+	JSR RTC_ParseDec
+	BCC noChange
 	SED
+	LDA TempSpace2+2
+	BPL positive
+	LDA #&50-1
+	ADC TempSpace2			\\ calculate 50-(-cc); C is set
+	STA TempSpace2			\\ save (50-(-cc))MOD100
+	JMP either
+.positive	
 	LDA #&50
 	SBC TempSpace2			\\ calculate 50-cc; C is set
 	STA TempSpace2			\\ save (50-cc)MOD100
 	ROL A					\\ put C in bit 0
 	EOR #1					\\ flip it
 	ROR A					\\ put it back
+.either
 	LDA TempSpace2+1
 	ADC #0					\\ add C
+	CLD
+	BCS overflow			\\ overflow
 	PHA						\\ save ss - (50 - cc)DIV100; TempSpace2+1 is mangled by BCDtoBinary
 	CLD
 	LDA TempSpace2			\\ (50 - cc)MOD100
@@ -289,7 +313,16 @@ ENDIF
 	JSR RTC_readTime
 	PLA						\\ ss - (50 - cc)DIV100
 	SED
-	JSR RTC_addSeconds		
+	BIT TempSpace2+2
+	BMI negative
+	JSR RTC_addSeconds
+	JMP either2
+.overflow
+	CLC
+	RTS
+.negative
+	JSR RTC_subSeconds
+.either2
 	CLD
 	JSR RTC_delay			\\ wait for centisecond count
 	JSR RTC_stopClock		\\ clear clock dividers
@@ -304,9 +337,11 @@ ELSE
 	SEC
 	RTS
 ENDIF
+}
 
 IF CALIBRATION
 .RTC_tuneClock
+{
 	JSR RTC_ParseTuningOffset
 	BCC badParse
 	STA TempSpace2
@@ -344,6 +379,7 @@ IF CALIBRATION
 	JMP RTC_sendByte
 .badParse
 	RTS
+}
 ENDIF
 
 \*******************************************************\
@@ -352,43 +388,106 @@ ENDIF
 \														\
 \*******************************************************\
 
-.RTC_addSeconds				\\ add accumulator seconds to time in RTC format. -20 <= A <= 20. Assumes D set
+.RTC_addSeconds             \\ add accumulator seconds to time in RTC format. 0 <= A <= 99. Assumes D set
+{
 	CLC
-	ADC TempSecond			\\ Seconds
-	CMP #&80				\\ treat anything above 79 as negative
-	BCS negSeconds
-	CMP #&60
-	BCS overSeconds
+	ADC TempSecond          \\ Seconds
+	BCC under100
+	SBC #&20                \\ C is set
+	BCC under120
 	STA TempSecond
-	RTS
-.negSeconds
-	ADC #&59				\\ C is set
-	STA TempSecond
-	LDA #&99				\\ carry -1
+	LDA #&2                 \\ carry +2
 	BNE RTC_addMinutes
-.overSeconds
-	SBC #&60				\\ C is set
+.under120
+	ADC #&60				\\ C is clear; add 120-60
+.carry1
 	STA TempSecond
-	LDA #&1					\\ carry +1
-.RTC_addMinutes				\\ add accumulator minutes to time in RTC format. -20 <= A <= 20. Assumes D set
-	CLC
-	ADC TempMinute			\\ Minutes
-	CMP #&80				\\ treat anything above 79 as negative
-	BCS negMinutes
+	LDA #&1                 \\ carry +1
+	BNE RTC_addMinutes
+.under100
 	CMP #&60
-	BCS overMinutes
+	BCC under60
+	SBC #&60
+	JMP carry1
+.under60
+	STA TempSecond
+	RTS
+}
+
+.RTC_subSeconds             \\ subtract accumulator seconds from time in RTC format. 0 <= A <= 99. Assumes D set
+{
+	LDX TempSecond
+	STA TempSecond
+	TXA
+	SEC
+	SBC TempSecond          \\ Minutes
+	BCS nonNeg
+	ADC #&60                \\ C is clear
+	BCC underm60
+	STA TempSecond
+	LDA #&1                 \\ carry -1
+	BNE RTC_subMinutes
+.underm60
+	ADC #&60				\\ C is clear
+	STA TempSecond
+	LDA #&2                 \\ carry -2
+	BNE RTC_subMinutes
+.nonNeg
+	STA TempSecond
+	RTS
+}
+
+.RTC_addMinutes             \\ add accumulator minutes to time in RTC format. 0 <= A <= 99. Assumes D set
+{
+	CLC
+	ADC TempMinute          \\ Minutes
+	BCC under100
+	SBC #&20                \\ C is set
+	BCC under120
+	STA TempMinute
+	LDA #&2                 \\ carry +2
+	BNE RTC_addHours
+.under120
+	ADC #&60				\\ C is clear; add 120-60
+.carry1
+	STA TempMinute
+	LDA #&1                 \\ carry +1
+	BNE RTC_addHours
+.under100
+	CMP #&60
+	BCC under60
+	SBC #&60
+	JMP carry1
+.under60
 	STA TempMinute
 	RTS
-.negMinutes
-	ADC #&59				\\ C is set
+}
+
+.RTC_subMinutes             \\ subtract accumulator minutes from time in RTC format. 0 <= A <= 99. Assumes D set
+{
+	LDX TempMinute
 	STA TempMinute
-	LDA #&99				\\ carry -1
+	TXA
+	SEC
+	SBC TempMinute          \\ Minutes
+	BCS nonNeg
+	ADC #&60                \\ C is clear
+	BCC underm60
+	STA TempMinute
+	LDA #&99                 \\ carry -1
 	BNE RTC_addHours
-.overMinutes
-	SBC #&60				\\ C is set
+.underm60
+	ADC #&60				\\ C is clear
 	STA TempMinute
-	LDA #&1					\\ carry +1
+	LDA #&98                 \\ carry -2
+	BNE RTC_addHours
+.nonNeg
+	STA TempMinute
+	RTS
+}
+
 .RTC_addHours				\\ add accumulator hours to time in RTC format. -38<=A<=38. Assumes D set
+{
 	CLC
 	ADC TempHour			\\ Hours
 	CMP #&62				\\ treat anything above 61 as negative
@@ -413,7 +512,7 @@ ENDIF
 	TXA
 	BNE RTC_addDays
 	RTS
-.RTC_addDays				\\ add accumulator days to time in RTC format. -20<=A<=20 Assumes D set
+.*RTC_addDays				\\ add accumulator days to time in RTC format. -20<=A<=20 Assumes D set
 	PHA						\\ save increment for month day
 	CLC
 	ADC TempWkday			\\ weekday (0-6)
@@ -432,7 +531,7 @@ ENDIF
 .wkDayDone
 	STA TempWkday
 	PLA						\\ restore increment for month day
-.RTC_addMonthDays			\\ add accumulator days to time in RTC format without changing weekday. -20<=A<=20 Assumes D set
+.*RTC_addMonthDays			\\ add accumulator days to time in RTC format without changing weekday. -20<=A<=20 Assumes D set
 	CLC
 	ADC TempDay				\\ Days
 	STA TempDay				\\ new day
@@ -466,7 +565,7 @@ ENDIF
 	SBC TempSpace2			\\ subtract month length
 	STA TempDay	
 	LDA #1					\\ carry +1
-.RTC_addMonths				\\ add accumulator months to time in RTC format. -12<=A<=12 Assumes D set
+.*RTC_addMonths				\\ add accumulator months to time in RTC format. -12<=A<=12 Assumes D set
 	CLC
 	ADC TempMonth			\\ Months
 	AND #&FF				\\ set flags
@@ -492,7 +591,7 @@ ENDIF
 	SBC #&12				\\ C is set
 	STA TempMonth
 	LDA #&1					\\ carry +1
-.RTC_addYears				\\ add accumulator years to time in RTC format. 0 <= A <= 99. Assumes D set
+.*RTC_addYears				\\ add accumulator years to time in RTC format. 0 <= A <= 99. Assumes D set
 	CLC
 	ADC TempYear			\\ Years
 	STA TempYear
@@ -500,11 +599,13 @@ ENDIF
 	ADC #&0					\\ C from years
 	STA TempCentury
 	RTS
+}
 
 .RTC_MonthLengths
 	EQUB &31,&28,&31,&30,&31,&30,&31,&31,&30,0,0,0,0,0,0,&31,&30,&31
 
 .RTC_monthLength			\\ calculate length of month in Y, from year in RTC format
+{
 	CPY #&2					\\ February
 	BEQ leapCheck
 	LDA RTC_MonthLengths-1,Y	\\ look up in table
@@ -524,4 +625,4 @@ ENDIF
 .leapYear
 	LDA #&29				\\ February, leap year
 	RTS
-
+}

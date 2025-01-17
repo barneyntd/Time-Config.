@@ -11,7 +11,8 @@
 	PRINT"(roundtrip time ";delta;" seconds)"
 	@%=&90A
 	IF ABS(theta) < 0.015 END
-	PRINT"Last clock correction ";TI%-TS%;" seconds ago."
+	PRINT"Last clock correction ";TI%-TS%;" seconds ago"
+	PRINT"(Approximate drift ";theta/(TI%-TS%)*86400;" seconds per day)"
 	PRINT"Press","0 to quit"'" ","1 to correct time"
 	IF TI%-TS%>7000 AND ABS(theta)>2.17E-6*(TI%-TS%) PRINT" ","2 to correct time and recalibrate clock"'"(Don't recalibrate after leap seconds)"
 	REPEAT:G$=GET$:UNTIL "0"<=G$ AND G$<="2"
@@ -126,7 +127,7 @@
 	REM ------- PROCcorrect adjust the clock by theta seconds
 	DEF PROCcorrect
 	LOCAL @%
-	IF ABS(theta)<20 THEN @%=&01020205:OSCLI("TIME S"+FNsigned(theta)):ENDPROC
+	IF ABS(theta)<99 THEN @%=&01020205:OSCLI("TIME S"+FNsigned(theta)):ENDPROC
 	?OSblock%=1:PROCosword(14,OSblock%)
 	Hr%=FNDtoUINT(OSblock%?4)+theta DIV3600
 	Min%=FNDtoUINT(OSblock%?5)+theta MOD3600DIV60
