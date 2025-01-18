@@ -12,7 +12,7 @@
 	@%=&90A
 	IF ABS(theta) < 0.015 END
 	PRINT"Last clock correction ";TI%-TS%;" seconds ago"
-	PRINT"(Approximate drift ";theta/(TI%-TS%)*86400;" seconds per day)"
+	PRINT"(Approximate drift ";-theta/(TI%-TS%)*86400;" seconds per day)"
 	PRINT"Press","0 to quit"'" ","1 to correct time"
 	IF TI%-TS%>7000 AND ABS(theta)>2.17E-6*(TI%-TS%) PRINT" ","2 to correct time and recalibrate clock"'"(Don't recalibrate after leap seconds)"
 	REPEAT:G$=GET$:UNTIL "0"<=G$ AND G$<="2"
@@ -68,7 +68,7 @@
 	DEF PROCReadTimes
 	CALL(Synchronise)
 	?OSblock%=1:PROCosword(14,OSblock%):OSblock%?7=5:PROCosword(14,OSblock%+7)
-	TI%=FNABCDtoSEC(OSblock%):TZ%=FNDtoSINT(OSblock%?8)*3600+FNDtoUINT(OSblock%?9)*60
+	TI%=FNABCDtoSEC(OSblock%):TZ%=FNDtoSINT(OSblock%?8)*3600:REM +FNDtoUINT(OSblock%?9)*60
 	?OSblock%=6:OSblock%?1=&FF:PROCosword(14,OSblock%)
 	OSblock%?8=0:OSblock%?9=0:TS%=FNABCDtoSEC(OSblock%)
 	IF TS%>TI%THEN OSBlock%?7=OSBlock%?7-1:TS%=FNABCDtoSEC(OSblock%)

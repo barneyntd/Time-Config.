@@ -163,13 +163,6 @@ ENDIF
 	LDX #4					\\ day, weekday, month, year
 	JSR RTC_sendBytes
 	JSR RTC_setCentury
-IF SAVE_SETTIME
-	LDA #RTC_TD_sec
-	LDY #0					\\ start from TempSpace
-	LDX #3					\\ seconds, minutes, hours
-	JSR RTC_readBytes
-	JSR RTC_saveSetTime
-ENDIF
 	SEC
 	RTS
 }
@@ -188,8 +181,8 @@ ENDIF
 	LDY #0					\\ start from TempSpace
 	LDX #7					\\ seconds, minutes, hours, day, weekday, month, year
 	JSR RTC_sendBytes
-IF SAVE_SETTIME
 	JSR RTC_setCentury
+IF SAVE_SETTIME
 	JSR RTC_saveSetTime
 ENDIF
 	SEC
