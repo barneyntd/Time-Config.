@@ -11,6 +11,7 @@ it some of the features of the BBC master. It has three main parts:
 	- ROM service calls 40 & 41: extendable CONFIGURE & STATUS
 	- \*-commands: TIME, CONFIGURE, STATUS, UNPLUG, INSERT & ROMS
 	- configure terms: BAUD, BOOT, NOBOOT, CAPS, NOCAPS, SHCAPS, DATA, DELAY, FDRIVE, FILE, IGNORE, LANG, LOUD, QUIET, MODE, TUBE, NOTUBE, PRINT, REPEAT, TV
+ 	- help terms: T&C and TIME
 3.  A version of SNTP over serial which allows you to synchronise the clock to internet time, to a precision of a few centiseconds.
 
 #### Project folders
