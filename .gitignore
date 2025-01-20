@@ -1,6 +1,6 @@
 old stuff/
 release/
 .DS_Store
-src/Builds/
 *.pages
 *.ssd
+*.xcodeproj

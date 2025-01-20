@@ -37,6 +37,7 @@ NVR_KeyRptRate		= 13
 NVR_PrinterIgnore	= 14
 NVR_TubeSerialPrint	= 15
 NVR_BellBSFormat	= 16
+NVR_NVRSize			= 255
 
 .SET_DefaultsTable
 \\	EQUB &FE				\\ address 1: FS station
@@ -69,10 +70,14 @@ SET_Defaults = P% - 17
 	INX
 	CPX #17
 	BCC resetLoop
-	LDY EconetIDreg
+	LDY EconetIDreg						\\ read Econet ID from jumpers
 	LDX #0
 	CLC
-	JSR FRAM_writeByte
+	JSR FRAM_writeByte					\\ save in NVRAM 0
+	LDY #&FF
+	LDX #NVR_NVRSize
+	CLC
+	JSR FRAM_writeByte					\\ ensure *FX 161,255 returns 255
 	JSR CON_ReadKeySwitches
 	TAX
 	AND #%00001000
@@ -124,11 +129,17 @@ SET_Defaults = P% - 17
 {
 	TYA
 	PHA
+	LDX #NVR_NVRSize
+	CLC
+	JSR FRAM_readByte		\\ check for blank NVRAM
+	TYA
+	BEQ doResetSettings
 	LDX #KeyCodeR
 	LDA #OSB_KbdScan
 	JSR OSBYTE				\\ check for R key pressed
 	TXA
 	BPL dontResetSettings
+.doResetSettings
 	JSR SET_Reset
 .dontResetSettings
 	LDA #OSB_BreakType

@@ -6,6 +6,7 @@ OSBYTEX		= &F0
 OSBYTEY		= &F1
 TextPointer	= &F2
 ReadRomPtr	= &F6
+ErrorPtr	= &FD
 TempSpace	= &A8		\\ A8 - AF supposed to be usable for OS commands
 TempSpace2	= &E4		\\ E4 - E6 general purpose, used by GSINIT/GSREAD
 OSBYTE		= &FFF4
@@ -194,30 +195,27 @@ ORG &8000
 
 .OSWORD0E					\\ Read clock in various ways. Sets A to 0 if done or 8 if not done
 {
+	JSR RTC_saveTempSpace
 	LDY #0
 	LDA (OSWORDPtr),Y		\\ function determined by first byte in buffer
 	BNE notReadTimeString	\\ 0: read date & time as string
 	JSR RTC_readTimeString
-	LDA #0
-	RTS
+	JMP OSW_used
 .notReadTimeString
 	CMP #1					\\ 1: read date & time as BCD
 	BNE notReadTimeBCD
 	JSR RTC_readTimeBCD
-	LDA #0
-	RTS
+	JMP OSW_used
 .notReadTimeBCD
 	CMP #2					\\ 2: convert BCD date & time to string
 	BNE notConvertBCDTime	
 	JSR RTC_ConvertTimeString
-	LDA #0
-	RTS
+	JMP OSW_used
 .notConvertBCDTime
 	CMP #5					\\ 5: read century & timezone as BCD
 	BNE notReadTimezone	
 	JSR RTC_ReadCTZBCD
-	LDA #0
-	RTS
+	JMP OSW_used
 .notReadTimezone
 IF SAVE_SETTIME
 	CMP #6					\\ 6: read alarm date & time as BCD
@@ -225,32 +223,36 @@ IF SAVE_SETTIME
 	INY
 	LDA (OSWORDPtr),Y		\\ alarm number determined by second byte in buffer
 	JSR RTC_readAlarmBCD
-	LDA #0
-	RTS
+	JMP OSW_used
 .notReadAlarmBCD
 ENDIF
 }
 .OSW_unused
+	JSR RTC_restoreTempSpace
+.OSW_unused2
 	LDA #8
+	RTS
+.OSW_used
+	JSR RTC_restoreTempSpace
+	LDA #0
 	RTS
 
 
 .OSWORD0F					\\ set date, time & alarm from string. Sets A to 0 if done or 8 if not done
 	LDY #0
 	LDA (OSWORDPtr),Y
-	BEQ OSW_unused
+	BEQ OSW_unused2
 	INY
 .doOSWORD0F
 {
 	CMP #25
-	BCS OSW_unused
+	BCS OSW_unused2
 	ASL A
-	TAX	
+	TAX
+	JSR RTC_saveTempSpace
 	JSR OSW_JMPtable
-.doneOSWORD0f
-	BCC OSW_unused			\\ error in time string
-	LDA #0
-	RTS
+	BCC OSW_unused			\\ unrecognised time string
+	JMP OSW_used
 .OSW_JMPtable
 	LDA OSWORDJMPtable-1,X	\\ address high
 	PHA

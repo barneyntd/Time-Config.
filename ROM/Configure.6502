@@ -109,11 +109,11 @@
 	LDA CON_DataTable+1,Y				\\ load mask
 .shiftLoop
 	LSR A
-	BCC shifted
+	BCC shiftLoopEnd
 	ASL TempSpace+2
 	BCC shiftLoop
 	BCS badParam
-.shifted
+.shiftLoopEnd
 	LDA CON_DataTable+1,Y				\\ reload mask
 	AND TempSpace+2					\\ check data size
 	BNE badParam

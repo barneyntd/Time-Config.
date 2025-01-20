@@ -113,12 +113,14 @@ FRAM_HIADDR		= %00001000		\\ Use address &100 to &1FF
 	RTS
 
 .VIA_sendByte					\\ send shift register communication; first byte in A; X, Y preserved
+{
 	STA VIA_sr					\\ send byte
 	LDA #IER_SR
 .wait1
 	BIT VIA_ifr					\\ check for shift complete
 	BEQ wait1					\\ still waiting
 	RTS
+}
 
 .VIA_inputMode					\\ switch shift register from output to input mode
 	LDA VIA_acr
@@ -129,12 +131,14 @@ FRAM_HIADDR		= %00001000		\\ Use address &100 to &1FF
 	RTS
 	
 .VIA_readByte
+{
 	LDA #IER_SR
 .wait4
 	BIT VIA_ifr				\\ check for shift complete
 	BEQ wait4				\\ still waiting
 	LDA VIA_sr					\\ read next byte
 	RTS
+}
 
 .VIA_endComm				\\ set VIA back to normal state; X, Y, C preserved
 	LDA VIA_acr
@@ -168,6 +172,7 @@ FRAM_HIADDR		= %00001000		\\ Use address &100 to &1FF
 
 .RTC_sendBytes				\\ send bytes to RTC registers in ascending order;
 							\\ A=start register, X=no of bytes, data in TempSpace,Y
+{
 	PHP						\\ save interrupt mask
 	SEI						\\ block interrupts
 	ORA #RTC_write
@@ -181,6 +186,7 @@ FRAM_HIADDR		= %00001000		\\ Use address &100 to &1FF
 	JSR VIA_endComm			\\ clean up
 	PLP						\\ restore interrupt mask
 	RTS
+}
 	
 .RTC_sendByte				\\ send one byte to RTC register;
 							\\ A=register, X=data
@@ -197,6 +203,7 @@ FRAM_HIADDR		= %00001000		\\ Use address &100 to &1FF
 
 .RTC_readBytes	   			\\ read RTC registers in ascending order;
 							\\ A=start register, X=no of bytes, data in TempSpace,Y
+{
 	PHP						\\ save interrupt mask
 	SEI						\\ block interrupts
 	ORA #RTC_read
@@ -211,6 +218,7 @@ FRAM_HIADDR		= %00001000		\\ Use address &100 to &1FF
 	JSR VIA_endComm			\\ clean up
 	PLP						\\ restore interrupt mask
 	RTS
+}
 
 .RTC_readByte	   			\\ read one RTC register;
 							\\ A=register, X=data
@@ -226,6 +234,7 @@ FRAM_HIADDR		= %00001000		\\ Use address &100 to &1FF
 	RTS
 
 .RTC_Synchronise			\\ wait for the seconds to tick over
+{
 	LDA #IER_disable OR IER_T2
 	STA VIA_ier				\\ disable T2 interrupt
 	LDX #RTC_C2_SI
@@ -238,9 +247,10 @@ FRAM_HIADDR		= %00001000		\\ Use address &100 to &1FF
 	LDX #0
 	LDA #RTC_C2
 	JMP RTC_sendByte		\\ turn off seconds alarm and return
-
+}
 
 .RTC_setupDelay				\\ set up clock & via for delay of X centiseconds
+{
 	BEQ noDelay
 	DEX						\\ T2 counts n+1
 	LDA VIA_acr
@@ -266,8 +276,10 @@ FRAM_HIADDR		= %00001000		\\ Use address &100 to &1FF
 	STA VIA_t2cl
 	STA VIA_t2ch			\\ count one microsecond, then set ifr
 	RTS
+}
 	
 .RTC_delay					\\ wait for T2 to countdown past zero
+{
 	LDA #IER_T2
 .waitT2loop
 	BIT VIA_ifr				\\ check T2 flag
@@ -275,6 +287,7 @@ FRAM_HIADDR		= %00001000		\\ Use address &100 to &1FF
 	LDA #RTC_TI
 	LDX #RTC_TI_OFF
 	JMP RTC_sendByte		\\ turn off timer and return
+}
 
 .RTC_stopClock
 	LDX #RTC_C1_STOP
@@ -302,6 +315,7 @@ FRAM_HIADDR		= %00001000		\\ Use address &100 to &1FF
 	JMP VIA_sendByte
 
 .FRAM_writeByte					\\ save byte in FRAM X=address, Y=value, C=address high bit
+{
 	PHP							\\ save interrupt mask
 	SEI							\\ block interrupts
 	LDA #FRAM_WREN
@@ -322,8 +336,10 @@ FRAM_HIADDR		= %00001000		\\ Use address &100 to &1FF
 	JSR VIA_endComm
 	PLP							\\ restore interrupt mask
 	RTS
-	
+}
+
 .FRAM_readByte					\\ read byte from FRAM X=address, Y=value, C=address high bit
+{
 	PHP							\\ save interrupt mask
 	SEI							\\ block interrupts
 	LDA #FRAM_READ
@@ -339,9 +355,11 @@ FRAM_HIADDR		= %00001000		\\ Use address &100 to &1FF
 	JSR VIA_endComm				\\ clean up
 	PLP							\\ restore interrupt mask
 	RTS
+}
 
 IF SAVE_SETTIME
 .FRAM_writeBytes				\\ write Y bytes to FRAM start address = X + 256 from TempSpace
+{
 	PHP							\\ save interrupt mask
 	SEI							\\ block interrupts
 	LDA #FRAM_WREN
@@ -359,8 +377,10 @@ IF SAVE_SETTIME
 	JSR VIA_endComm				\\ clean up
 	PLP							\\ restore interrupt mask
 	RTS
+}
 
 .FRAM_readBytes					\\ read Y bytes from FRAM start address = X + 256 to TempSpace
+{
 	PHP							\\ save interrupt mask
 	SEI							\\ block interrupts
 	LDA #FRAM_READ OR FRAM_HIADDR
@@ -376,5 +396,6 @@ IF SAVE_SETTIME
 	JSR VIA_endComm				\\ clean up
 	PLP							\\ restore interrupt mask
 	RTS
+}
 ENDIF
 

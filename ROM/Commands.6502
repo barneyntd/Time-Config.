@@ -198,15 +198,15 @@ ENDIF
 .CMD_doError
 {
 	PLA
-	STA TempSpace
+	STA ErrorPtr
 	PLA
-	STA TempSpace+1
+	STA ErrorPtr+1
 	LDA #0								\\ opcode for BRK
 	TAY
 .errorLoop
 	STA &0100,Y
 	INY
-	LDA (TempSpace),Y
+	LDA (ErrorPtr),Y
 	BNE errorLoop
 .errorLoop2
 	LDA helpBase,X

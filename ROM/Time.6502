@@ -22,6 +22,50 @@ TempMonth			= TempSpace+5		\\ months, 01 - 12 BCD
 TempYear			= TempSpace+6		\\ year, 00 - 99 BCD
 TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
 
+.RTC_saveTempSpace
+{
+	PLA
+	STA TempSpace2			\\ save return address
+	PLA
+	STA TempSpace2+1
+	STY TempSpace2+2		\\ save Y
+	LDY #7
+.saveLoop
+	LDA TempSpace,Y
+	PHA
+	DEY
+	BPL saveLoop
+	LDY TempSpace2+2		\\ restore Y
+	LDA TempSpace2+1		\\ restore return address
+	PHA
+	LDA TempSpace2
+	PHA
+	RTS
+}
+
+.RTC_restoreTempSpace
+{
+	PLA
+	STA TempSpace2			\\ save return address
+	PLA
+	STA TempSpace2+1
+	STY TempSpace2+2		\\ save Y
+	LDY #0
+.saveLoop
+	PLA
+	STA TempSpace,Y
+	INY
+	CPY #8
+	BNE saveLoop
+	LDY TempSpace2+2		\\ restore Y
+	LDA TempSpace2+1		\\ restore return address
+	PHA
+	LDA TempSpace2
+	PHA
+	RTS
+}
+
+
 \*******************************************************\
 \														\
 \				Read RTC registers						\

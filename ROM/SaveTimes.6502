@@ -5,15 +5,18 @@
 \*******************************************************\
 
 .RTC_readSavedTime
+{
 	BPL readAlarmBCD
 	LDX #NVR_SetTime
 	LDY #8
 	JMP FRAM_readBytes		\\ read seconds .. century
 .readAlarmBCD				\\ Read date & time from NVRAM to TempSpace; A = alarm no
 	RTS
+}
 
 IF SAVE_SETTIME
 .RTC_saveSetTime
+{
 	LDX #NVR_HourOffset
 	SEC
 	JSR FRAM_readByte		\\ look up timezone
@@ -28,5 +31,6 @@ IF SAVE_SETTIME
 	LDY #8
 	SEC
 	JMP FRAM_writeBytes
+}
 ENDIF
 

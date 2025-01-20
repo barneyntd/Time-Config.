@@ -53,13 +53,28 @@ void dump(uint8_t bytes[48])
     }
 }
 
-int64_t sntp(char* server, uint8_t replyBlock[48])
+int openSerial(char* device, int speed)
 {
-    uint64_t sendTime, dstTime;
-    uint8_t queryBlock[48] = {0};
+    struct termios terminal;
+    int serial = open(device, O_RDWR | O_NOCTTY | O_NDELAY);
+    if (serial == -1) return -1;
+ 
+    tcflush(serial, TCIOFLUSH);
+
+    tcgetattr(serial, &terminal);
+    terminal.c_cflag |= CLOCAL | CREAD; // | CCTS_OFLOW | CRTS_IFLOW;
+    terminal.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
+    terminal.c_oflag &= ~OPOST;
+    cfsetspeed(&terminal, speed);
+    tcsetattr(serial, TCSANOW, &terminal);
+    fcntl(serial,F_SETFL,0);
+    return serial;
+}
+
+int openSntp(char* server)
+{
     int sockNum;
     struct addrinfo hints, *address;
-    uint64_t correction;
     int error;
 
     memset(&hints, 0, sizeof(hints));
@@ -72,7 +87,7 @@ int64_t sntp(char* server, uint8_t replyBlock[48])
     if (error)
     {
         fprintf(stderr, "Can't find server %d\n", error);
-        return INT64_MIN;
+        return -1;
     }
 
     // Create socket:
@@ -80,58 +95,60 @@ int64_t sntp(char* server, uint8_t replyBlock[48])
     if(sockNum < 0)
     {
         fprintf(stderr, "Can't create socket %d\n",errno);
-        return INT64_MIN;
+        return -1;
     }
     
-    // set up query block
-    sendTime = getNtpTime();
-    LIVM(queryBlock) = 4<<3 | 3;                    // LI = 0, VN = 4, Mode = 3
-    XmtTime(queryBlock) = htonll(sendTime);
+    // Set socket address:
+    if(connect(sockNum, address->ai_addr, address->ai_addrlen))
+    {
+        fprintf(stderr, "Can't connect to server %d\n", errno);
+        return -1;
+    }
+    
+    freeaddrinfo(address);
+    return sockNum;
+}
+
+int64_t sntp(int sockNum, uint8_t queryBlock[], uint8_t replyBlock[])
+{
+    uint64_t sendTime = getNtpTime(), recvTime;
 
     // Send the message to server:
-    if(sendto(sockNum, queryBlock, 48, 0,
-              address->ai_addr, address->ai_addrlen) < 48)
+    if(send(sockNum, queryBlock, 48, 0) < 48)
     {
         fprintf(stderr, "Unable to send query %d\n",errno);
         return INT64_MIN;
     }
     
     // Receive the server's response:
-    if(recvfrom(sockNum, replyBlock, 48, 0, NULL, 0) < 48){
+    if(recvfrom(sockNum, replyBlock, 48, 0, NULL, 0) < 48)
+    {
         fprintf(stderr, "Unable to receive reply %d\n", errno);
         return INT64_MIN;
     }
     
-    // remember receive time
-    dstTime = getNtpTime();
-    
-    // Close the socket:
-    close(sockNum);
-    freeaddrinfo(address);
-    
-    correction = (ntohll(RecvTime(replyBlock)) - sendTime) - (dstTime - ntohll(XmtTime(replyBlock)));
-    Stratum(replyBlock) += 1;                           // increment stratum
-    RefTime(replyBlock) = htonll(dstTime + correction);     // set reference time to now
-    return correction;
+    recvTime = getNtpTime();
+    return ((int64_t)(ntohll(RecvTime(replyBlock)) - sendTime) - (int64_t)(recvTime - ntohll(XmtTime(replyBlock)))) /2;
 }
 
 int main(int argc, char * argv[])
 {
     
-    int serial;
-    struct termios terminal;
+    int serial, sock = -1;
     char *server = "pool.ntp.org";
     char opt;
-    int baud = 9600;
-    uint8_t stateBlock[48];
-    int64_t correction;
+    int speed = 9600;
+    int local = 0;
+    int interval = 24*60*60;
+    int64_t correction = 0;
+    uint64_t lastCheck = 0;
 #ifdef DEBUG
     int debug = 2;
 #else
-    int debug = 0;
+    int debug = 1;
 #endif
 
-    while((opt = getopt(argc, argv, "s:b:d:")) != -1)
+    while((opt = getopt(argc, argv, "s:b:d:t:l")) != -1)
         switch(opt)
         {
             case 's':
@@ -141,7 +158,7 @@ int main(int argc, char * argv[])
             }
             case 'b':
             {
-                baud = atoi(optarg);
+                speed = atoi(optarg);
                 break;
             }
             case 'd':
@@ -149,41 +166,44 @@ int main(int argc, char * argv[])
                 debug = atoi(optarg);
                 break;
             }
+            case 't':
+            {
+                interval = atoi(optarg);
+                break;
+            }
+            case 'l':
+            {
+                local = 1;
+                break;
+            }
         }
 
     if (!argv[optind])
     {
-        fprintf(stderr, "Usage: %s [-sbd] <tty>\n",argv[0]);
+        fprintf(stderr, "Usage: %s [-sbdtl] <tty>\n",argv[0]);
         return -1;
     }
 
-    correction = sntp(server, stateBlock);
-    if (correction == INT64_MIN)
-        return -1;
-    
-    if (debug)
-    {
-        fprintf(stderr, "Received state data\n");
-        if (debug>=2) dump(stateBlock);
-        fprintf(stderr, "Correction %f\n", correction / 4.2949673E9);
-    }
-
-    
-    serial = open(argv[optind], O_RDWR | O_NOCTTY | O_NDELAY);
+    serial = openSerial(argv[optind], speed);
     if (serial == -1) return -1;
-    tcflush(serial, TCIOFLUSH);
 
-    tcgetattr(serial, &terminal);
-    terminal.c_cflag |= CLOCAL | CREAD; // | CRTSCTS;
-    terminal.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
-    terminal.c_oflag &= ~OPOST;
-    cfsetspeed(&terminal, baud);
-    tcsetattr(serial, TCSANOW, &terminal);
-    fcntl(serial,F_SETFL,0);
+    if (!local)
+    {
+        sock = openSntp(server);
+        if (sock == -1) return -1;
+    }
+
+    uint8_t replyBlock[48] = {0};
+    if (local)
+    {
+        LIVM(replyBlock) = 4<<3 | 4;                    // LI = 0, VN = 4, Mode = 4
+        Stratum(replyBlock) = 4;                        // kind of random
+        RefTime(replyBlock) = htonll(getNtpTime());     // set reference time to now
+    }
     
     while(1)
     {
-        uint8_t queryBlock[48],replyBlock[48];
+        uint8_t queryBlock[48];
         int count = 0;
         uint64_t dstTime;
         
@@ -195,8 +215,7 @@ int main(int argc, char * argv[])
             count += chars;
         }
         while (count < 48);
-        dstTime = getNtpTime() + correction;
-        
+        dstTime = getNtpTime();
         if (debug)
         {
             fprintf(stderr, "Received query data\n");
@@ -204,15 +223,30 @@ int main(int argc, char * argv[])
         }
         
         // calculate reply
-        
-        memcpy(replyBlock,stateBlock,24);
-        OrgTime(replyBlock) = XmtTime(queryBlock);
-        RecvTime(replyBlock) = htonll(dstTime + correction);
-        XmtTime(replyBlock) = htonll(getNtpTime() + correction);
+        if (!local && dstTime > lastCheck + ((uint64_t)interval << 32))
+        {
+            if (debug) fprintf(stderr, "Forwarding to server\n");
+            correction = sntp(sock, queryBlock, replyBlock);
+            if (correction == INT64_MIN)
+                return -1;
+            if (debug)
+            {
+                fprintf(stderr, "Received reply data\n");
+                if (debug>=2) dump((uint8_t *)replyBlock);
+                fprintf(stderr, "Correction %f\n", correction / 4.2949673E9);
+            }
+            lastCheck = dstTime;
+            Stratum(replyBlock) += 1;                           // increment stratum
+        }
+        else
+        {
+            OrgTime(replyBlock) = XmtTime(queryBlock);
+            RecvTime(replyBlock) = htonll(dstTime + correction);
+            XmtTime(replyBlock) = htonll(getNtpTime() + correction);
+        }
 
         if(write(serial,replyBlock,48) != 48)
             return(-3);
- 
         if (debug)
         {
             fprintf(stderr, "Reply sent\n");
@@ -221,4 +255,6 @@ int main(int argc, char * argv[])
     }
     return 0;
 }
+
+
 
