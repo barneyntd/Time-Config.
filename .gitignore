@@ -3,4 +3,4 @@ release/
 .DS_Store
 *.pages
 *.ssd
-*.xcodeproj
+*.xcodeproj/
