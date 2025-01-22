@@ -11,6 +11,8 @@
 	EQUS "S+ss.cc",0
 .timestr8
 	EQUS "hh:mm:ss",0
+.timestr9
+	EQUS "zzz+hh:mm",0
 .timestr15
 	EQUS "www,dd mmm yyyy",0
 .timestr24
