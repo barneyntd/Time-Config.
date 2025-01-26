@@ -13,10 +13,10 @@ MonthsCount	= (P% - RTC_MonthsString)/3
 	EQUS "SunMonTueWedThuFriSat"
 DaysCount = (P% - RTC_DaysString)/3
 .RTC_BSTString
-	EQUS "UTCGMTBSTWETCETEETMSKNSTASTESTCSTMSTPSTAWTACTAETNZTEATCATWATPKTISTHKTJST"
+	EQUS "UTCGMTBSTWETCETEETMSKASTESTCSTMSTPSTAWTACTAETNZTEATCATWATPKTISTHKTJST"
 BSTCount = (P% - RTC_BSTString)/3
 .RTC_BSTOffset
-	EQUB &0,&0,&1,&0,&1,&2,&3,&96+&40,&96,&95,&94,&93,&92,&08,&09+&40,&10,&12,&3,&2,&1,&05,&05+&40,&8,&9
+	EQUB &0,&0,&1,&0,&1,&2,&3,&96,&95,&94,&93,&92,&08,&09+&40,&10,&12,&3,&2,&1,&05,&05+&40,&8,&9
 .RTC_ListZoneString
 	EQUS " = UTC",0
 .RTC_ListZoneMins
@@ -79,13 +79,13 @@ BSTCount = (P% - RTC_BSTString)/3
 	LSR A
 	LSR A
 	LSR A
-	TAY
-	LDX #4
+	TAX
 .minLoop
-	LDA RTC_ListZoneMins,Y
+	LDA RTC_ListZoneMins,X
 	JSR OSWRCH
-	INY
-	DEX
+	INX
+	TXA
+	AND #3
 	BNE minLoop
 	INC TempSpace
 	CPY #BSTCount*3
@@ -376,15 +376,16 @@ ENDIF
 	ASL A
 	ASL A
 	ASL A
-	STA TextPointer			\\ save tens value
+	STA TempSpace2+2		\\ save tens value
 	JSR RTC_ASCdigit		\\ calculate units
 	BMI noMatch				\\ if error, return
-	ORA TextPointer			\\ add tens
+	ORA TempSpace2+2		\\ add tens
+	SEC
 	RTS
 }
 	
 .RTC_matchWord				\\ look up 3 character word in (OSWORDPtr),Y in list & Y+=3; return index (from 0) or &FF in X & N set
-							\\ last list element in (TextPointer),Y, no of elements - 1 in X
+							\\ last list element in (TempSpace2),Y, no of elements - 1 in X
 {
 	STX TempSpace
 	STY TempSpace+1
@@ -392,7 +393,7 @@ ENDIF
 	LDX #3					\\ 3 characters per word
 .letterLoop
 	LDA (OSWORDPtr),Y		\\ next letter
-	EOR (TextPointer),Y		\\ compare with list
+	EOR (TempSpace2),Y		\\ compare with list
 	AND #LO(NOT(&20))		\\ ignore capitalisation
 	BNE notThisWord			\\ characters don't match
 	INY						\\ next character
@@ -405,12 +406,12 @@ ENDIF
 	DEC TempSpace
 	BMI noMoreWords			\\ end of list
 	LDY TempSpace+1			\\ restore Y to start of word
-	LDA TextPointer
+	LDA TempSpace2
 	SEC
 	SBC #3					\\ back three characters in list
-	STA TextPointer
+	STA TempSpace2
 	BCS wordLoop
-	DEC TextPointer+1
+	DEC TempSpace2+1
 	JMP wordLoop
 }
 
@@ -450,14 +451,14 @@ ENDIF
 
 .RTC_ParseWeekday
 {
-	STY TextPointer
+	STY TempSpace2
 	LDA #LO(RTC_DaysString + DaysCount*3)
 	SEC
-	SBC TextPointer
-	STA TextPointer
+	SBC TempSpace2
+	STA TempSpace2
 	LDA #HI(RTC_DaysString + DaysCount*3)
 	SBC #0
-	STA TextPointer+1
+	STA TempSpace2+1
 	LDX #DaysCount
 	JSR RTC_matchWord		\\ find weekday
 	BMI noMatch
@@ -468,14 +469,14 @@ ENDIF
 
 .RTC_ParseMonth
 {
-	STY TextPointer
+	STY TempSpace2
 	LDA #LO(RTC_MonthsString + MonthsCount*3)
 	SEC
-	SBC TextPointer
-	STA TextPointer
+	SBC TempSpace2
+	STA TempSpace2
 	LDA #HI(RTC_MonthsString + MonthsCount*3)
 	SBC #0
-	STA TextPointer+1
+	STA TempSpace2+1
 	LDX #MonthsCount
 	JSR RTC_matchWord		\\ find month
 	BMI noMatch
@@ -528,29 +529,41 @@ ENDIF
 	RTS
 }
 
-.RTC_ParseBST				\\ parse three letter time zone, result in A
+.RTC_ParseBST				\\ parse three letter time zone, hours in TempSpace2, mins in TempSpace2+1
 {
-	STY TextPointer
+	STY TempSpace2
 	LDA #LO(RTC_BSTString + BSTCount*3)
 	SEC
-	SBC TextPointer
-	STA TextPointer
+	SBC TempSpace2
+	STA TempSpace2
 	LDA #HI(RTC_BSTString + BSTCount*3)
 	SBC #0
-	STA TextPointer+1
+	STA TempSpace2+1
 	LDX #BSTCount
 	JSR RTC_matchWord
 	BMI noMatch2
 	LDA RTC_BSTOffset,X
+	AND #&9F				\\ forget minutes
+	STA TempSpace2
+	LDA RTC_BSTOffset,X
+	LSR A
+	LSR A
+	LSR A
+	LSR A
+	LSR A
+	TAX
+	LDA mult15table,X
+	STA TempSpace2+1
 	SEC
 	RTS
+.mult15table
+	EQUB &00,&15,&30,&45,&00,&45,&30,&15
 }
 
-.RTC_ParseTimeZone			\\ parse string of the form zzz+hh or zzz-hh, result in
+.RTC_ParseTimeZone			\\ parse string of the form zzz+hh or zzz-hh, hours in TempSpace2, mins in TempSpace2+1
 {
-	JSR RTC_ParseBST		\\ parse UTC
+	JSR RTC_ParseBST		\\ parse TLA
 	BCC noMatch2			\\ not recognised
-	STA TempSpace			\\ save timezone offset 
 	LDA (OSWORDPtr),Y		\\ + or - sign
 	TAX
 	INY
@@ -560,24 +573,27 @@ ENDIF
 	BEQ plusMatch
 	CPX #'-'
 	BNE noMatch2
-	STA TempSpace+1
-	LDA TempSpace			\\ load timezone
-	AND #&9F				\\ forget minutes
+	STA TempSpace
+	LDA TempSpace2			\\ load timezone
 	SED
-	SBC TempSpace+1			\\ subtract number; C is set from CPX
+	SBC TempSpace			\\ subtract number; C is set from CPX
 	JMP limitCheck
 .plusMatch
 	SED
 	CLC
-	ADC TempSpace			\\ add timezone
-.limitCheck
+	ADC TempSpace2			\\ add timezone
+.^limitCheck
 	CLD
 	CMP #&20
 	BCC below20
 	CMP #&81
 	BCC noMatch2
 .below20
+	STA TempSpace2
 	SEC
+	RTS
+.^noMatch2
+	CLC
 	RTS
 }
 
@@ -585,7 +601,45 @@ ENDIF
 {
 	JSR RTC_ParseTimeZone
 	BCC noMatch2
-	
+	LDA (OSWORDPtr),Y
+	CMP #':'
+	BNE noMatch2
+	INY
+	JSR RTC_textToBCD		\\ read number
+	BCC noMatch2
+	CPX #'+'
+	BEQ plusMatch
+	CPX #'-'
+	BNE noMatch2
+	STA TempSpace
+	LDA TempSpace2+1		\\ timezone minutes
+	SED
+	SBC TempSpace			\\ C is set from CPX
+	BCS noCarry
+	ADC #&60
+	STA TempSpace2+1
+	LDA TempSpace2
+	SBC #1					\\ C is set from ADC
+	JMP limitCheck
+.noCarry
+	STA TempSpace2+1
+	CLD
+	SEC
+	RTS
+.plusMatch
+	CLC
+	SED
+	ADC TempSpace2+1		\\ timezone minutes
+	BCS carry1
+	CMP #&60
+	BCC noCarry
+.carry1
+	SBC #&60				\\ carry is set
+	STA TempSpace2+1
+	LDA TempSpace2
+	CLC
+	ADC #1
+	JMP limitCheck
 }
 
 .RTC_ParseInc				\\ parse string of the form S+ or S-, return 1 or &FF in A
@@ -593,13 +647,13 @@ ENDIF
 	LDA (OSWORDPtr),Y
 	AND #LO(NOT(&20))		\\ ignore capitalisation
 	CMP #'S'
-	BNE noMatch2
+	BNE noMatch3
 	INY
 	LDA (OSWORDPtr),Y		\\ + or - sign
 	CMP #'+'
 	BEQ plusMatch
 	CMP #'-'
-	BNE noMatch2
+	BNE noMatch3
 	LDA #'+'-2
 .plusMatch
 	INY
@@ -611,18 +665,18 @@ ENDIF
 .RTC_ParseDec				\\ parse string of the form ss.cc
 {
 	JSR RTC_textToBCD		\\ read ss
-	BCC noMatch2
+	BCC noMatch3
 	STA TempSpace2+1
 	LDA (OSWORDPtr),Y		\\ decimal point
 	CMP #'.'
-	BNE noMatch2
+	BNE noMatch3
 	INY
 	JSR RTC_textToBCD		\\ read cc
-	BCC noMatch2
+	BCC noMatch3
 	STA TempSpace2
 	SEC
 	RTS
-.^noMatch2
+.^noMatch3
 	CLC
 	RTS
 }
@@ -633,15 +687,15 @@ IF CALIBRATION
 	LDA (OSWORDPtr),Y		\\ check for 'C'
 	AND #LO(NOT(&20))		\\ ignore capitalisation
 	CMP #'C'
-	BNE noMatch2
+	BNE noMatch3
 	INY
 	INY						\\ skip + or - sign
 	JSR RTC_textToBCD		\\ read number
-	BCC noMatch2
+	BCC noMatch3
 	JSR BCDtoBinary
 	STA TempSpace			\\ save number
 	CMP #64					\\ limit to +-63
-	BCS noMatch2
+	BCS noMatch3
 	DEY
 	DEY
 	DEY						\\ go back to +-sign
@@ -649,7 +703,7 @@ IF CALIBRATION
 	CMP #'+'
 	BEQ plusMatch3
 	CMP #'-'
-	BNE noMatch2
+	BNE noMatch3
 	LDA #0
 	SBC TempSpace			\\ negate number; C is set
 	SEC

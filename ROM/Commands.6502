@@ -227,7 +227,7 @@ ENDIF
 	BNE setTime				\\ not end of line
 .printTime
 	LDY #0
-	STY OSWORDPtr+1
+	STY OSWORDPtr+1			\\ don't save in buffer
 	JSR RTC_readTimeString	\\ read current time and send to OSWRCH
 .doneTime
 	LDA #0
@@ -253,8 +253,8 @@ ENDIF
 	STA OSWORDPtr+1
 	LDY TempSpace			\\ back to saved point
 	LDA TempSpace+1			\\ retrieve length without trailing whitespace
-	JSR doOSWORD0F
-	BEQ doneTime
+	JSR OSW_timeCommand
+	BCS doneTime
 	LDX #&FF
 	JSR CMD_doError
 	EQUS 252, "Bad time", 0

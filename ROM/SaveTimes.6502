@@ -17,15 +17,20 @@
 IF SAVE_SETTIME
 .RTC_saveSetTime
 {
+	LDX #NVR_MinuteOffset
+	SEC
+	JSR FRAM_readByte		\\ look up timezone minutes
+	TYA
+	SED
+	JSR RTC_subMinutes		\\ subtract timezone minutes from time
 	LDX #NVR_HourOffset
 	SEC
-	JSR FRAM_readByte		\\ look up timezone
+	JSR FRAM_readByte		\\ look up timezone hours
 	STY TempSpace2
-	SED
 	LDA #0
 	SEC
 	SBC TempSpace2
-	JSR RTC_addHours		\\ subtract timezone from time
+	JSR RTC_addHours		\\ subtract timezone hours from time
 	CLD
 	LDX #NVR_SetTime
 	LDY #8

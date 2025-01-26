@@ -4,7 +4,7 @@ OSWORDNum	= &EF
 OSBYTEA		= &EF
 OSBYTEX		= &F0
 OSBYTEY		= &F1
-TextPointer	= &F2
+TextPointer	= &F2		\\ Command line pointer
 ReadRomPtr	= &F6
 ErrorPtr	= &FD
 TempSpace	= &A8		\\ A8 - AF supposed to be usable for OS commands
@@ -38,11 +38,11 @@ ORG &8000
 	JMP ROM_service
 	EQUB %11000010					\\ 6502 code, no relocation, language, service
 	EQUB ROM_copyright - codeStart - 1
-	EQUB 02							\\ version 02
+	EQUB 03							\\ version 03
 .ROM_title
 	EQUS "Time & Config.", 0		\\ Title
 .ROM_version
-	EQUS "0.02", 0					\\ Version
+	EQUS "0.03", 0					\\ Version
 .ROM_copyright
 	EQUS "(C) 2025 Barney Hilken", 0
 	EQUD 0
@@ -187,91 +187,6 @@ ORG &8000
 	JMP OSNEWL					\\ print newline
 }
 
-\*******************************************************\
-\														\
-\				OSWORD 14 & 15							\
-\														\
-\*******************************************************\
-
-.OSWORD0E					\\ Read clock in various ways. Sets A to 0 if done or 8 if not done
-{
-	JSR RTC_saveTempSpace
-	LDY #0
-	LDA (OSWORDPtr),Y		\\ function determined by first byte in buffer
-	BNE notReadTimeString	\\ 0: read date & time as string
-	JSR RTC_readTimeString
-	JMP OSW_used
-.notReadTimeString
-	CMP #1					\\ 1: read date & time as BCD
-	BNE notReadTimeBCD
-	JSR RTC_readTimeBCD
-	JMP OSW_used
-.notReadTimeBCD
-	CMP #2					\\ 2: convert BCD date & time to string
-	BNE notConvertBCDTime	
-	JSR RTC_ConvertTimeString
-	JMP OSW_used
-.notConvertBCDTime
-	CMP #5					\\ 5: read century & timezone as BCD
-	BNE notReadTimezone	
-	JSR RTC_ReadCTZBCD
-	JMP OSW_used
-.notReadTimezone
-IF SAVE_SETTIME
-	CMP #6					\\ 6: read alarm date & time as BCD
-	BNE notReadAlarmBCD
-	INY
-	LDA (OSWORDPtr),Y		\\ alarm number determined by second byte in buffer
-	JSR RTC_readAlarmBCD
-	JMP OSW_used
-.notReadAlarmBCD
-ENDIF
-}
-.OSW_unused
-	JSR RTC_restoreTempSpace
-.OSW_unused2
-	LDA #8
-	RTS
-.OSW_used
-	JSR RTC_restoreTempSpace
-	LDA #0
-	RTS
-
-
-.OSWORD0F					\\ set date, time & alarm from string. Sets A to 0 if done or 8 if not done
-	LDY #0
-	LDA (OSWORDPtr),Y
-	BEQ OSW_unused2
-	INY
-.doOSWORD0F
-{
-	CMP #25
-	BCS OSW_unused2
-	ASL A
-	TAX
-	JSR RTC_saveTempSpace
-	JSR OSW_JMPtable
-	BCC OSW_unused			\\ unrecognised time string
-	JMP OSW_used
-.OSW_JMPtable
-	LDA OSWORDJMPtable-1,X	\\ address high
-	PHA
-	LDA OSWORDJMPtable-2,X	\\ address low
-	PHA
-	RTS
-}
-
-.OSW_oneChar
-{
-	LDA (OSWORDPtr),Y
-	AND #LO(NOT(&20))		\\ ignore capitalisation
-	CMP #'S'
-	BNE OSW_unused
-	JSR RTC_Synchronise
-	LDA #0
-	RTS
-}
-
 
 
 INCLUDE "VIA.6502"
@@ -282,22 +197,10 @@ INCLUDE "Configure.6502"
 INCLUDE "Strings.6502"
 INCLUDE "Roms.6502"
 INCLUDE "Settings.6502"
+INCLUDE "OswordEF.6502"
 IF SAVE_SETTIME
 	INCLUDE "SaveTimes.6502"
 ENDIF
-
-
-.OSWORDJMPtable
-IF CALIBRATION = 0
-	RTC_tuneClock = OSW_unused
-ENDIF
-	EQUW OSW_oneChar-1, OSW_unused-1, RTC_setBSTZone-1, RTC_tuneClock-1
-	EQUW OSW_unused-1, RTC_setTimeZone-1, RTC_incSeconds-1, RTC_setTimeOnly-1
-	EQUW OSW_unused-1, OSW_unused-1, OSW_unused-1, OSW_unused-1
-	EQUW OSW_unused-1, OSW_unused-1, RTC_setDateOnly-1, OSW_unused-1
-	EQUW OSW_unused-1, OSW_unused-1,OSW_unused-1, OSW_unused-1
-	EQUW OSW_unused-1, OSW_unused-1,OSW_unused-1, RTC_setDateTime-1
-
 
 
 .codeEnd

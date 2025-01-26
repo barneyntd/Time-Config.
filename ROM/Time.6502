@@ -22,48 +22,6 @@ TempMonth			= TempSpace+5		\\ months, 01 - 12 BCD
 TempYear			= TempSpace+6		\\ year, 00 - 99 BCD
 TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
 
-.RTC_saveTempSpace
-{
-	PLA
-	STA TempSpace2			\\ save return address
-	PLA
-	STA TempSpace2+1
-	STY TempSpace2+2		\\ save Y
-	LDY #7
-.saveLoop
-	LDA TempSpace,Y
-	PHA
-	DEY
-	BPL saveLoop
-	LDY TempSpace2+2		\\ restore Y
-	LDA TempSpace2+1		\\ restore return address
-	PHA
-	LDA TempSpace2
-	PHA
-	RTS
-}
-
-.RTC_restoreTempSpace
-{
-	PLA
-	STA TempSpace2			\\ save return address
-	PLA
-	STA TempSpace2+1
-	STY TempSpace2+2		\\ save Y
-	LDY #0
-.saveLoop
-	PLA
-	STA TempSpace,Y
-	INY
-	CPY #8
-	BNE saveLoop
-	LDY TempSpace2+2		\\ restore Y
-	LDA TempSpace2+1		\\ restore return address
-	PHA
-	LDA TempSpace2
-	PHA
-	RTS
-}
 
 
 \*******************************************************\
@@ -150,6 +108,7 @@ TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
 .year8099
 	TYA						\\ flags
 	BPL checkCentury		\\ NVR_Flags_8099 clear
+	SEC
 	RTS
 .^checkCentury
 	LDA TempCentury			\\ century
@@ -273,36 +232,53 @@ ENDIF
 \														\
 \*******************************************************\
 
+.RTC_setTimeZoneMin			\\ adjust time depending on string UTC+hh:mm or UTC-hh:mm
+{
+	JSR RTC_ParseTimeZoneMin
+	JMP doSetBSTZone
+}
+
 .RTC_setTimeZone			\\ adjust time depending on string UTC+hh or UTC-hh
 {
-	JSR RTC_ParseTimeZone
+	JSR RTC_ParseTimeZone	\\ parse new offset, hours in TempSpace2, mins in TempSpace2+1
 	JMP doSetBSTZone
 }	
 .RTC_setBSTZone				\\ adjust time depending on TLA in (OSWORDPtr),Y
 {
-	JSR RTC_ParseBST		\\ parse new offset
+	JSR RTC_ParseBST		\\ parse new offset, hours in TempSpace2, mins in TempSpace2+1
 .^doSetBSTZone
 	BCC noChange			\\ not recognised
-	PHA						\\ save temporarily
-	LDX #NVR_HourOffset
-	SEC
-	JSR FRAM_readByte		\\ look up old offset
-	STY TempSpace2			\\ save for subtraction
-	PLA						\\ new offset
-	TAY
-	SED						\\ BCD mode on
-	SEC
-	SBC TempSpace2			\\ - old offset
-	CLD
-	BEQ noChange			\\ nothing to do; C is still set
-	PHA						\\ save the difference
-	LDX #NVR_HourOffset
-	SEC
-	JSR FRAM_writeByte		\\ save new offset
-	JSR RTC_readTime		\\ read date & time into TempSpace
-	PLA						\\ time difference
+	LDX #NVR_MinuteOffset
+	JSR FRAM_readByte		\\ look up old minute offset (C is set)
+	STY TempSpace2+2		\\ save for subtraction
+	LDY TempSpace2+1		\\ new minute offset
+	JSR FRAM_writeByte		\\ save new minute offset (C is still set)
+	TYA
 	SED
+	SBC TempSpace2+2		\\ subtract old offset (C still set)
+	PHP						\\ save the carry
+	BCS positive
+	ADC #&60				\\ convert negative minutes
+.positive
+	PHA						\\ save minute difference
+	LDX #NVR_HourOffset
+	JSR FRAM_readByte		\\ look up old hour offset (C is set)
+	STY TempSpace2+2		\\ save for subtraction
+	LDY TempSpace2			\\ new hour offset
+	JSR FRAM_writeByte		\\ save new hour offset (C is still set)
+	PLA
+	PLP						\\ retrieve carry
+	PHA
+	TYA
+	SBC TempSpace2+2
+	PHA						\\ save hour difference
+	CLD
+	JSR RTC_readTime		\\ read date & time into TempSpace
+	SED
+	PLA						\\ hour difference
 	JSR RTC_addHours		\\ calculate new time
+	PLA						\\ minute differencee
+	JSR RTC_addMinutes		\\ calculate new time
 	CLD
 	LDA #RTC_TD_sec			\\ seconds register
 	LDX #7					\\ seconds, minutes, hours, days, weekdays, months, years
