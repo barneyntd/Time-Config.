@@ -72,7 +72,6 @@
 	JSR RTC_ReadCTZBCD
 	JMP used
 .notReadTimezone
-IF SAVE_SETTIME
 	CMP #6					\\ 6: read alarm date & time as BCD
 	BNE notReadAlarmBCD
 	INY
@@ -80,7 +79,6 @@ IF SAVE_SETTIME
 	JSR RTC_readAlarmBCD
 	JMP used
 .notReadAlarmBCD
-ENDIF
 }
 
 
@@ -91,9 +89,6 @@ ENDIF
 \*******************************************************\
 
 .OSWORDJMPtable
-IF CALIBRATION = 0
-	RTC_tuneClock = OSW_unused
-ENDIF
 	EQUW OSW_oneChar-1, OSW_unused-1, RTC_setBSTZone-1, RTC_tuneClock-1
 	EQUW OSW_unused-1, RTC_setTimeZone-1, RTC_incSeconds-1, RTC_setTimeOnly-1
 	EQUW RTC_setTimeZoneMin-1, OSW_unused-1, OSW_unused-1, OSW_unused-1

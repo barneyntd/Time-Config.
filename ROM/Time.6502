@@ -2,9 +2,9 @@
 NVR_Flags		= &FF
 NVR_Flags_8099	= %10000000			\\ Year is '80 - '99
 NVR_Flags_FLY	= %01000000			\\ False leap year, not yet corrected
-NVR_Century		= &FE
-NVR_HourOffset	= &FD				\\ Offset from UTC for timezone & summertime
-NVR_MinuteOffset= &FC				\\ Not currently implemented
+NVR_Century		= &FC
+NVR_HourOffset	= &FD				\\ Hour offset from UTC for timezone & summertime
+NVR_MinuteOffset= &FE				\\ minute offset
 NVR_SetTime		= &F0				\\ time clock was set, in UTC
 
 \*******************************************************\
@@ -142,7 +142,6 @@ TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
 	LDY #0					\\ start from TempSpace
 	LDX #3					\\ seconds, minutes, hours
 	JSR RTC_sendBytes
-IF SAVE_SETTIME
 	LDA #RTC_TD_day
 	LDX #4					\\ day, wkday, month, year
 	JSR RTC_readBytes
@@ -151,7 +150,6 @@ IF SAVE_SETTIME
 	JSR FRAM_readByte		\\ get century
 	STY TempCentury
 	JSR RTC_saveSetTime
-ENDIF
 	SEC						\\ no error
 .^badString
 	RTS						\\ carry is clear
@@ -185,9 +183,7 @@ ENDIF
 	LDX #7					\\ seconds, minutes, hours, day, weekday, month, year
 	JSR RTC_sendBytes
 	JSR RTC_setCentury
-IF SAVE_SETTIME
 	JSR RTC_saveSetTime
-ENDIF
 	SEC
 	RTS
 }
@@ -293,11 +289,12 @@ ENDIF
 {
 	JSR RTC_ParseInc
 	BCC noChange			\\ not recognised
-	STA TempSpace2+2
+	TAX
 	JSR RTC_ParseDec
 	BCC noChange
 	SED
-	LDA TempSpace2+2
+	TXA
+	STA TempSpace2+2
 	BPL positive
 	LDA #&50-1
 	ADC TempSpace2			\\ calculate 50-(-cc); C is set
@@ -344,15 +341,9 @@ ENDIF
 	LDX #7					\\ seconds, minutes, hours, day, weekday, month, year
 	JSR RTC_sendBytes		\\ set new time
 	JSR RTC_startClock		\\ restart clock
-IF SAVE_SETTIME
 	JMP RTC_saveSetTime
-ELSE
-	SEC
-	RTS
-ENDIF
 }
 
-IF CALIBRATION
 .RTC_tuneClock
 {
 	JSR RTC_ParseTuningOffset
@@ -393,7 +384,6 @@ IF CALIBRATION
 .badParse
 	RTS
 }
-ENDIF
 
 \*******************************************************\
 \														\

@@ -68,7 +68,7 @@
 	DEF PROCReadTimes
 	CALL(Synchronise)
 	?OSblock%=1:PROCosword(14,OSblock%):OSblock%?7=5:PROCosword(14,OSblock%+7)
-	TI%=FNABCDtoSEC(OSblock%):TZ%=FNDtoSINT(OSblock%?8)*3600:REM +FNDtoUINT(OSblock%?9)*60
+	TI%=FNABCDtoSEC(OSblock%):TZ%=FNDtoSINT(OSblock%?8)*3600+FNDtoUINT(OSblock%?9)*60
 	?OSblock%=6:OSblock%?1=&FF:PROCosword(14,OSblock%)
 	OSblock%?8=0:OSblock%?9=0:TS%=FNABCDtoSEC(OSblock%)
 	IF TS%>TI%THEN OSBlock%?7=OSBlock%?7-1:TS%=FNABCDtoSEC(OSblock%)
@@ -146,8 +146,8 @@
 	LOCAL C%
 	C%=INT(theta*460800/(TI%-TS%)+0.5)
 	IF ABS(C%)>63 OR C%=0 ENDPROC
-	PRINT"*TIME C"+FNsigned(C%)
-	REM OSCLI("TIME C"+FNsigned(C%))
+	PRINT"*TIME T"+FNsigned(C%)
+	REM OSCLI("TIME T"+FNsigned(C%))
 	ENDPROC
 
 

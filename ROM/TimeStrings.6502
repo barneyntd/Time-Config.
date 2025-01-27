@@ -307,9 +307,9 @@ BSTCount = (P% - RTC_BSTString)/3
 
 .RTC_ReadCTZBCD				\\ read century and timezone from FRAM as BCD to buffer
 {
-	LDX #NVR_MinuteOffset
+	LDX #NVR_Century
 	LDY #3
-	JSR FRAM_readBytes		\\ read minute offset, hour offset, century
+	JSR FRAM_readBytes		\\ read century, hour offset, minute offset
 	LDY #2
 .readCTZloop
 	LDA TempSpace,Y
@@ -318,13 +318,12 @@ BSTCount = (P% - RTC_BSTString)/3
 	BPL readCTZloop
 	RTS
 }
-IF SAVE_SETTIME
+
 .RTC_readAlarmBCD			\\ Read date & time from NVRAM & convert to ABCD; A = alarm no, or N for set time
 {
 	JSR RTC_readSavedTime
 	JMP RTC_TimeToABCD
 }
-ENDIF
 	
 \*******************************************************\
 \														\
@@ -681,12 +680,11 @@ ENDIF
 	RTS
 }
 
-IF CALIBRATION
-.RTC_ParseTuningOffset		\\ parse string of the form C+tt or C-tt
+.RTC_ParseTuningOffset		\\ parse string of the form T+tt or T-tt
 {
-	LDA (OSWORDPtr),Y		\\ check for 'C'
+	LDA (OSWORDPtr),Y		\\ check for 'T'
 	AND #LO(NOT(&20))		\\ ignore capitalisation
-	CMP #'C'
+	CMP #'T'
 	BNE noMatch3
 	INY
 	INY						\\ skip + or - sign
@@ -712,7 +710,6 @@ IF CALIBRATION
 	LDA TempSpace			\\ C is set
 	RTS
 }
-ENDIF
 
 
 

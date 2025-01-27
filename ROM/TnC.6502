@@ -20,8 +20,6 @@ OSRDRM		= &FFB9
 OS_RomTable	= &02A1
 OS_ROMNum	= &F4
 
-SAVE_SETTIME = 1		\\ save date & time of last set in UTC
-CALIBRATION = 1			\\ implement C+-cc to adjust offset register
 
 
 ORG &8000
@@ -198,9 +196,7 @@ INCLUDE "Strings.6502"
 INCLUDE "Roms.6502"
 INCLUDE "Settings.6502"
 INCLUDE "OswordEF.6502"
-IF SAVE_SETTIME
-	INCLUDE "SaveTimes.6502"
-ENDIF
+INCLUDE "SaveTimes.6502"
 
 
 .codeEnd
@@ -208,4 +204,6 @@ ENDIF
 PRINT "Code size ", codeEnd - codeStart, "bytes"
 SAVE "TnC", codeStart, codeEnd, VIA_setup
 PUTBASIC "../sntp/SNTPoS.bas", "SNTPoS"
+PUTFILE "../Test/CLKDMP", "CLKDMP", &2800, &2800
+
 

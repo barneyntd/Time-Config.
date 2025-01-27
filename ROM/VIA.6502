@@ -357,7 +357,6 @@ FRAM_HIADDR		= %00001000		\\ Use address &100 to &1FF
 	RTS
 }
 
-IF SAVE_SETTIME
 .FRAM_writeBytes				\\ write Y bytes to FRAM start address = X + 256 from TempSpace
 {
 	PHP							\\ save interrupt mask
@@ -369,9 +368,11 @@ IF SAVE_SETTIME
 	JSR FRAM_startComm			\\ start memory write
 	TXA
 	JSR VIA_sendByte			\\ send address
+	LDX #0
 .writeFramLoop
-	LDA TempSpace-1,Y			\\ get byte
+	LDA TempSpace,X				\\ get byte
 	JSR VIA_sendByte			\\ send byte to FRAM
+	INX
 	DEY
 	BNE writeFramLoop
 	JSR VIA_endComm				\\ clean up
@@ -388,14 +389,15 @@ IF SAVE_SETTIME
 	TXA
 	JSR VIA_sendByte			\\ send address
 	JSR VIA_inputMode
+	LDX #0
 .readFramLoop
 	JSR VIA_readByte			\\ read byte from FRAM
-	STA TempSpace-1,Y			\\ save it
+	STA TempSpace,X				\\ save it
+	INX
 	DEY
 	BNE readFramLoop
 	JSR VIA_endComm				\\ clean up
 	PLP							\\ restore interrupt mask
 	RTS
 }
-ENDIF
 

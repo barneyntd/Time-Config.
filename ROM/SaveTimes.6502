@@ -14,7 +14,6 @@
 	RTS
 }
 
-IF SAVE_SETTIME
 .RTC_saveSetTime
 {
 	LDX #NVR_MinuteOffset
@@ -37,5 +36,4 @@ IF SAVE_SETTIME
 	SEC
 	JMP FRAM_writeBytes
 }
-ENDIF
 
