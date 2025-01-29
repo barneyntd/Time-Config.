@@ -14,10 +14,10 @@
 	PRINT"Last clock correction ";TI%-TS%;" seconds ago"
 	PRINT"(Approximate drift ";-theta/(TI%-TS%)*86400;" seconds per day)"
 	PRINT"Press","0 to quit"'" ","1 to correct time"
-	IF TI%-TS%>7000 AND ABS(theta)>2.17E-6*(TI%-TS%) PRINT" ","2 to correct time and recalibrate clock"'"(Don't recalibrate after leap seconds)"
+	W% = TI%-TS%>7000 AND ABS(theta)>2.17E-6*(TI%-TS%):IF W% PRINT" ","2 to correct time and recalibrate clock"'"(Don't recalibrate after leap seconds)"
 	REPEAT:G$=GET$:UNTIL "0"<=G$ AND G$<="2"
 	IF G$="0" END
-	IF G$="2" PROCcalibrate
+	IF W% AND G$="2" PROCcalibrate
 	PROCcorrect
 	END
 
@@ -146,8 +146,7 @@
 	LOCAL C%
 	C%=INT(theta*460800/(TI%-TS%)+0.5)
 	IF ABS(C%)>63 OR C%=0 ENDPROC
-	PRINT"*TIME T"+FNsigned(C%)
-	REM OSCLI("TIME T"+FNsigned(C%))
+	OSCLI("TIME T"+FNsigned(C%))
 	ENDPROC
 
 
