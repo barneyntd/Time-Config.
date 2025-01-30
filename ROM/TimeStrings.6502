@@ -260,6 +260,18 @@ BSTCount = (P% - RTC_BSTString)/3
 	RTS
 }
 
+IF OSWORDE8
+.RTC_readTimeBCD8
+{
+	LDY #7					\\ data is shifted for century
+	JSR RTC_TimeToABCD2
+	DEY
+	LDA TempCentury
+	STA (OSWORDPtr),Y
+	RTS
+}
+ENDIF
+
 .RTC_ABCDtoTime				\\ Convert Acorn format BCD time to RTC time
 							\\ OSWORDPtr=buffer address for data, buffer size = 7
 	LDY #6
@@ -304,6 +316,18 @@ BSTCount = (P% - RTC_BSTString)/3
 	JSR RTC_ABCDtoTime2		\\ convert to RTC time
 	JMP RTC_TimetoText		\\ and print to string
 }
+
+IF OSWORDE8
+.RTC_ConvertTimeString8
+{
+	LDY #8					\\ the data is two bytes shifted
+	JSR RTC_ABCDtoTime2		\\ convert to RTC time
+	DEY
+	LDA (OSWORDPtr),Y		\\ century
+	STA TempCentury
+	JMP RTC_TimetoText		\\ and print to string
+}
+ENDIF
 
 .RTC_ReadCTZBCD				\\ read century and timezone from FRAM as BCD to buffer
 {

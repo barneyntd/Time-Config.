@@ -79,6 +79,19 @@
 	JSR RTC_readAlarmBCD
 	JMP used
 .notReadAlarmBCD
+IF OSWORDE8
+	CMP #9					\\ 9: read date & time as BCD with century
+	BNE notReadTimeBCD8
+	JSR RTC_readTimeBCD8
+	JMP used
+.notReadTimeBCD8
+	CMP #10					\\ 10: convert BCD date & time to string with century
+	BNE notConvertBCDTime8	
+	JSR RTC_ConvertTimeString8
+	JMP used
+.notConvertBCDTime8
+ENDIF
+	JMP unused
 }
 
 

@@ -21,6 +21,7 @@ OS_RomTable	= &02A1
 OS_ROMNum	= &F4
 
 
+OSWORDE8	= 1			\\ implement versions of OSWORD 14,1 & 14,2 with century
 
 ORG &8000
 
