@@ -263,6 +263,7 @@ BSTCount = (P% - RTC_BSTString)/3
 IF OSWORDE8
 .RTC_readTimeBCD8
 {
+	JSR RTC_readTime
 	LDY #7					\\ data is shifted for century
 	JSR RTC_TimeToABCD2
 	DEY
