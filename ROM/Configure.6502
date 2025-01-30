@@ -23,6 +23,7 @@
 	EQUB 15,	%00011111,	%00100000		\\ PRINT
 	EQUB 13,	0,			8				\\ REPEAT
 	EQUB 0:		EQUW CON_TV-1				\\ TV
+	EQUB 0:		EQUW CON_Timezone-1			\\ TIMEZONE
 \\	EQUB 16,	%11111011,	%00000000		\\ INTUBE
 \\	EQUB 16,	%11111011,	%00000100		\\ EXTUBE
 \\	EQUB 16,	%11110111,	%00000000		\\ SCROLL
@@ -384,3 +385,7 @@
 }
 
 
+.CON_Timezone
+{
+	BCC timezoneStatus
+}

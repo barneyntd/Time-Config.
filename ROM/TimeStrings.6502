@@ -12,15 +12,10 @@ MonthsCount	= (P% - RTC_MonthsString)/3
 .RTC_DaysString
 	EQUS "SunMonTueWedThuFriSat"
 DaysCount = (P% - RTC_DaysString)/3
-.RTC_BSTString
-	EQUS "UTCGMTBSTWETCETEETMSKASTESTCSTMSTPSTAWTACTAETNZTEATCATWATPKTISTHKTJST"
-BSTCount = (P% - RTC_BSTString)/3
-.RTC_BSTOffset
-	EQUB &0,&0,&1,&0,&1,&2,&3,&96,&95,&94,&93,&92,&08,&09+&40,&10,&12,&3,&2,&1,&05,&05+&40,&8,&9
 .RTC_ListZoneString
-	EQUS " = UTC",0
-.RTC_ListZoneMins
-	EQUS "    :15 :30 :45 "
+	EQUS " = "
+.RTC_UTCString
+	EQUS "UTC",0
 
 .RTC_ListZones
 {
@@ -225,8 +220,9 @@ BSTCount = (P% - RTC_BSTString)/3
 	JSR RTC_readTime
 .RTC_TimeToABCD				\\ Convert RTC time to Acorn format BCD time
 							\\ OSWORDPtr=buffer address for result, buffer size = 7
-{
 	LDY #6
+.RTC_TimeToABCD2
+{
 	LDA TempSecond			\\ seconds
 	BMI errorTimeBCD		\\ clock integrity failed
 	STA (OSWORDPtr),Y
@@ -259,6 +255,18 @@ BSTCount = (P% - RTC_BSTString)/3
 	BPL timeErrLoop
 	RTS
 }
+
+IF OSWORDE8
+.RTC_readTimeBCD8
+{
+	LDY #7					\\ data is shifted for century
+	JSR RTC_TimeToABCD2
+	DEY
+	LDA TempCentury
+	STA (OSWORDPtr),Y
+	RTS
+}
+ENDIF
 
 .RTC_ABCDtoTime				\\ Convert Acorn format BCD time to RTC time
 							\\ OSWORDPtr=buffer address for data, buffer size = 7
@@ -304,6 +312,18 @@ BSTCount = (P% - RTC_BSTString)/3
 	JSR RTC_ABCDtoTime2		\\ convert to RTC time
 	JMP RTC_TimetoText		\\ and print to string
 }
+
+IF OSWORDE8
+.RTC_ConvertTimeString8
+{
+	LDY #8					\\ the data is two bytes shifted
+	JSR RTC_ABCDtoTime2		\\ convert to RTC time
+	DEY
+	LDA (OSWORDPtr),Y		\\ century
+	STA TempCentury
+	JMP RTC_TimetoText		\\ and print to string
+}
+ENDIF
 
 .RTC_ReadCTZBCD				\\ read century and timezone from FRAM as BCD to buffer
 {

@@ -20,7 +20,7 @@ OSRDRM		= &FFB9
 OS_RomTable	= &02A1
 OS_ROMNum	= &F4
 
-
+OSWORDE8	= 1			\\ implement OSWRD 14,9 & OSWRD 14,10: like 14,1 & 14,2, but with century
 
 ORG &8000
 
