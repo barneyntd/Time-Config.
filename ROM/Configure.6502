@@ -134,7 +134,7 @@
 .^badParam
 	LDX TempSpace+3						\\ load parameter type
 	JSR CMD_doError
-	EQUS 252, "Bad parameter: expecting ", 0
+	EQUS 252, "Bad parameter, expecting ", 0
 }	
 
 
@@ -147,10 +147,10 @@
 	STA TempSpace+3						\\ save parameter description
 	LDA TempSpace+1						\\ load command index
 	ASL A
-	ADC TempSpace+1
-	STA TempSpace+1						\\ multiply index by 3
+	ADC TempSpace+1						\\ multiply index by 3
 	TAY
 .termStatus
+	STY TempSpace+1
 	LDA CON_DataTable,Y					\\ NVRAM address
 	AND #&7F
 	TAX
@@ -199,7 +199,9 @@
 	LDA #' '
 	JSR OSWRCH
 	LDA TempSpace						\\ numeric parameter value
+	STY TempSpace+1
 	JSR STR_PrintNum
+	LDY TempSpace+1
 .^endLine
 	JSR OSNEWL
 .nothing
@@ -217,8 +219,7 @@
 	TYA
 	PHA									\\ save character position
 	LDX #configTable - commandTable
-	LDA #0
-	STA TempSpace+1						\\ index
+	LDY #0
 .termLoop1
 	STX TempSpace+2						\\ start of term
 .termLoop
@@ -227,12 +228,10 @@
 	BEQ termDone
 	BPL termLoop
 	STA TempSpace+3
-	LDY TempSpace+1						\\ index
 	JSR termStatus						\\ print term & status
 	INY
 	INY
 	INY
-	STY TempSpace+1
 	BNE termLoop1						\\ always
 }
 
@@ -325,15 +324,15 @@
 	CLC
 	JSR GSINIT						\\ skip spaces
 	BEQ noInterlace					\\ nothing here
-	CMP #','							\\ check for comma
+	CMP #','						\\ check for comma
 	BNE noComma
 	INY
 .noComma
-	JSR STR_ParseDec					\\ read numeric parameter
+	JSR STR_ParseDec				\\ read numeric parameter
 	BCS doInterlace
 	BNE badParam1
 .noInterlace
-	LDA #0								\\ default interlace
+	LDA #0							\\ default interlace
 .doInterlace
 	CMP #2
 	BCS badParam1
@@ -345,30 +344,30 @@
 	STA TempSpace+1
 	LDX #10
 	CLC
-	JSR FRAM_readByte					\\ read NVRAM from address 10
+	JSR FRAM_readByte				\\ read NVRAM from address 10
 	TYA
-	AND #%00001111						\\ NVRAM mask relevant bits
-	ORA TempSpace+1						\\ set value
+	AND #%00001111					\\ NVRAM mask relevant bits
+	ORA TempSpace+1					\\ set value
 	TAY
-	JSR FRAM_writeByte					\\ save new value
+	JSR FRAM_writeByte				\\ save new value
 	LDA #0
 	RTS
 
 .tvStatus
 	LDX #10
 	CLC
-	JSR FRAM_readByte					\\ read NVRAM from address 10
-	TYA									\\ result
+	JSR FRAM_readByte				\\ read NVRAM from address 10
+	TYA								\\ result
 	LSR A
 	LSR A
 	LSR A
 	LSR A
-	STA TempSpace						\\ relevant bits from NVRAM
-	LDX TempSpace+2						\\ start of this term
+	STA TempSpace					\\ relevant bits from NVRAM
+	LDX TempSpace+2					\\ start of this term
 	JSR CMD_printTerm
 	LDA #' '
 	JSR OSWRCH
-	LDA TempSpace						\\ load value
+	LDA TempSpace					\\ load value
 	LSR A
 	CMP #4
 	BCC notNeg
@@ -377,7 +376,7 @@
 	JSR STR_PrintNum
 	LDA #','
 	JSR OSWRCH
-	LDA TempSpace						\\ load value
+	LDA TempSpace					\\ load value
 	AND #1
 	JSR STR_printDigit
 	LDY TempSpace+1
@@ -385,7 +384,90 @@
 }
 
 
+
+.timezoneStatus
+	LDX TempSpace+2					\\ start of this term
+	LDA TempSpace+1
+	PHA
+	JSR CMD_printTerm
+	JSR OSNEWL
+	TXA
+	PHA
+	JSR RTC_ListZones				\\ print list of timezones
+	PLA
+	TAX
+	PLA
+	TAY
+	LDA #0
+	RTS
+
 .CON_Timezone
 {
 	BCC timezoneStatus
+	LDY TempSpace					\\ get character pos
+	CLC
+	JSR GSINIT						\\ skip spaces
+	BEQ blankZone					\\ nothing here
+	LDA TextPointer
+	STA OSWORDPtr
+	LDA TextPointer+1
+	STA OSWORDPtr+1
+	JSR RTC_ParseTZN				\\ check if it exists
+	BCS foundIt
+	LDX #NVR_TZDefs
+.searchLoop
+	SEC
+	JSR FRAM_readByte
+	CPY #0
+	BEQ foundSpace
+	TXA
+	ADC #4							\\ C is set from CPY
+	TAX
+	CPX #NVR_TZDefs+NVR_TZDefsSpace
+	BCC searchLoop
+	LDX #&FF
+	JSR CMD_doError
+	EQUS 252, "No room", 0
+.foundSpace
+	LDY TempSpace2					\\ character pos saved in RTC_ParseTZN
+	JSR GSREAD
+	BCS	badName 
+	TAY
+	SEC
+	JSR FRAM_writeByte
+	INX
+	LDY TempSpace2
+	INY
+	JSR GSREAD
+	BCS	badName 
+	TAY
+	SEC
+	JSR FRAM_writeByte
+	INX
+	LDY TempSpace2
+	INY
+	INY
+	JSR GSREAD
+	BCS	badName
+	TAY
+	SEC
+	JSR FRAM_writeByte
+	DEX
+	DEX
+	LDY TempSpace2
+	INY
+	INY
+	INY
+.foundIt
+	JSR RTC_rewriteTZN
+	LDA #0
+	RTS
+.blankZone
+	JSR RTC_resetTZN
+	LDA #0
+	RTS
+.badName
+	LDX #&FF
+	JSR CMD_doError
+	EQUS 252, "Bad timezone name", 0
 }

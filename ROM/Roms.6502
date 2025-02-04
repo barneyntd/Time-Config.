@@ -27,7 +27,7 @@
 	BCS ROM_plugData
 	LDX #helpRom-helpBase
 	JSR CMD_doError
-	EQUS 254, "Bad rom id: expecting ", 0
+	EQUS 254, "Bad rom ID, expecting ", 0
 	
 .*ROM_plugData					\\ expects rom id in TempSpace, returns NVRAM data in TempSpace+1 & bitmask in A & NVRAM address in X
 	LDX #6						\\ FRAM address is 6 or 7

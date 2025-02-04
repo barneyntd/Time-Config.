@@ -20,7 +20,7 @@ OSRDRM		= &FFB9
 OS_RomTable	= &02A1
 OS_ROMNum	= &F4
 
-OSWORDE8	= 1			\\ implement OSWRD 14,9 & OSWRD 14,10: like 14,1 & 14,2, but with century
+OSWORDE8	= 0			\\ implement OSWRD 14,9 & OSWRD 14,10: like 14,1 & 14,2, but with century
 
 ORG &8000
 
@@ -36,11 +36,11 @@ ORG &8000
 	JMP ROM_service
 	EQUB %11000010					\\ 6502 code, no relocation, language, service
 	EQUB ROM_copyright - codeStart - 1
-	EQUB 03							\\ version 03
+	EQUB 04							\\ version 04
 .ROM_title
 	EQUS "Time & Config.", 0		\\ Title
 .ROM_version
-	EQUS "0.03", 0					\\ Version
+	EQUS "0.04", 0					\\ Version
 .ROM_copyright
 	EQUS "(C) 2025 Barney Hilken", 0
 	EQUD 0
@@ -153,10 +153,7 @@ ORG &8000
 	JSR OSNEWL
 	LDA timestr1+1,X
 	BNE helpLoop1
-	JSR STR_PrintString
-	EQUS "  Timezones",13,0
-	JSR RTC_ListZones			\\ print list of timezones
-	JMP doneHelp
+	BEQ doneHelp
 .noHelpTerm
 	JSR helpHeading
 	LDX #helpTable-commandTable
@@ -204,6 +201,12 @@ INCLUDE "SaveTimes.6502"
 PRINT "Code size ", codeEnd - codeStart, "bytes"
 SAVE "TnC", codeStart, codeEnd, VIA_setup
 PUTBASIC "../sntp/SNTPoS.bas", "SNTPoS"
-PUTFILE "../Test/CLKDMP", "CLKDMP", &2800, &2800
+PUTTEXT "../Timezones/Africa.txt", "Africa", &0000
+PUTTEXT "../Timezones/Australasia.txt", "Austral", &0000
+PUTTEXT "../Timezones/Europe.txt", "Europe", &0000
+PUTTEXT "../Timezones/Far East.txt", "FarEast", &0000
+PUTTEXT "../Timezones/Subcontinent.txt", "Subcont", &0000
+PUTTEXT "../Timezones/USA.txt", "USA", &0000
+
 
 

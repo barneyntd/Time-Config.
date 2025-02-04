@@ -31,7 +31,6 @@
 	CMP #helpRom - helpBase
 	BEQ printDigit1
 	PLA
-	STY TempSpace+1
 	LDY #0
 	SEC
 .loop100
@@ -55,11 +54,9 @@
 	ADC #10
 	PHA
 	DEY
-	BEQ no10s
+	BEQ printDigit1
 	TYA
 	JSR STR_printDigit
-.no10s
-	LDY TempSpace+1
 .printDigit1
 	PLA
 .*STR_printDigit
@@ -70,6 +67,19 @@
 .letters
 	ADC #'A'-11
 	JMP OSWRCH
+}
+
+.STR_PrintBCD
+{
+	PHA
+	LSR A
+	LSR A
+	LSR A
+	LSR A
+	JSR	STR_printDigit
+	PLA
+	AND #&F
+	JMP STR_printDigit
 }
 
 .STR_ParseNum

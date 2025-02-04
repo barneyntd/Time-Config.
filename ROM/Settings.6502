@@ -133,15 +133,12 @@ SET_Defaults = P% - 17
 	CLC
 	JSR FRAM_readByte		\\ check for blank NVRAM
 	TYA
-	BEQ doResetSettings
+	BEQ resetEverything
 	LDX #KeyCodeR
 	LDA #OSB_KbdScan
 	JSR OSBYTE				\\ check for R key pressed
 	TXA
-	BPL dontResetSettings
-.doResetSettings
-	JSR SET_Reset
-.dontResetSettings
+	BMI resetSettings
 	LDA #OSB_BreakType
 	LDX #0
 	LDY #&FF
@@ -153,7 +150,11 @@ SET_Defaults = P% - 17
 	TAY
 	LDA #1
 	RTS
-
+.resetEverything
+	JSR RTC_resetClock		\\ reset clock chip & variables
+	JSR RTC_resetTZN		\\ reset timezone names
+.resetSettings
+	JSR SET_Reset
 .hardBreak
 	LDX #NVR_VDUSettings
 	CLC

@@ -5,7 +5,9 @@ NVR_Flags_FLY	= %01000000			\\ False leap year, not yet corrected
 NVR_Century		= &FC
 NVR_HourOffset	= &FD				\\ Hour offset from UTC for timezone & summertime
 NVR_MinuteOffset= &FE				\\ minute offset
-NVR_SetTime		= &F0				\\ time clock was set, in UTC
+NVR_SetTime		= &F0				\\ time clock was set, in UTC, eight bytes
+NVR_TZDefs		= &A0				\\ start of saved timezone names
+NVR_TZDefsSpace	= &50				\\ 16 * 5 = 80 bytes, three letters, hour, minute
 
 \*******************************************************\
 \														\
@@ -22,6 +24,17 @@ TempMonth			= TempSpace+5		\\ months, 01 - 12 BCD
 TempYear			= TempSpace+6		\\ year, 00 - 99 BCD
 TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
 
+
+
+\*******************************************************\
+\														\
+\				Timezone format							\
+\														\
+\*******************************************************\
+
+TempTZN				= TempSpace			\\ name, three alphabetic characters
+TempHourOffset		= TempSpace+3		\\ hours, -19 - +19 signed BCD
+TempMinuteOffset	= TempSpace+4		\\ minutes, 00 - 59 BCD
 
 
 \*******************************************************\
@@ -134,6 +147,21 @@ TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
 \														\
 \*******************************************************\
 
+.RTC_resetClock
+{
+	LDA #RTC_C1
+	LDX #RTC_C1_RESET
+	JSR RTC_sendByte		\\ reset clock chip
+	LDX #NVR_SetTime		\\ start of clock variables
+	LDY #0
+	SEC
+.wipeLoop
+	JSR FRAM_writeByte
+	INX
+	BNE wipeLoop
+	RTS
+}
+
 .RTC_setTimeOnly			\\ set time from string in format hh:mm:ss in (OSWORDPtr),Y
 {
 	JSR RTC_ParseTime
@@ -228,30 +256,37 @@ TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
 \														\
 \*******************************************************\
 
-.RTC_setTimeZoneMin			\\ adjust time depending on string UTC+hh:mm or UTC-hh:mm
+.RTC_setTimeZoneMin				\\ adjust time depending on string zzz+hh:mm or zzz-hh:mm
 {
-	JSR RTC_ParseTimeZoneMin
-	JMP doSetBSTZone
+	JSR RTC_ParseTZN			\\ parse zzz
+	BCC noChange
+	JSR RTC_ParseTimeZone		\\ parse +/-hh
+	BCC noChange
+	JSR RTC_ParseTimeZoneMin	\\ parse :mm
+	JMP doSetTZNZone
 }
 
-.RTC_setTimeZone			\\ adjust time depending on string UTC+hh or UTC-hh
+.RTC_setTimeZone				\\ adjust time depending on string zzz+hh or zzz-hh
 {
-	JSR RTC_ParseTimeZone	\\ parse new offset, hours in TempSpace2, mins in TempSpace2+1
-	JMP doSetBSTZone
-}	
-.RTC_setBSTZone				\\ adjust time depending on TLA in (OSWORDPtr),Y
+	JSR RTC_ParseTZN			\\ parse zzz
+	BCC noChange
+	JSR RTC_ParseTimeZone		\\ parse +/-hh
+	JMP doSetTZNZone
+}
+
+.RTC_setTZNZone				\\ adjust time depending on TLA in (OSWORDPtr),Y
 {
-	JSR RTC_ParseBST		\\ parse new offset, hours in TempSpace2, mins in TempSpace2+1
-.^doSetBSTZone
+	JSR RTC_ParseTZN		\\ parse new offset, hours in TempSpace+3, mins in TempSpace+4
+.^doSetTZNZone
 	BCC noChange			\\ not recognised
 	LDX #NVR_MinuteOffset
 	JSR FRAM_readByte		\\ look up old minute offset (C is set)
-	STY TempSpace2+2		\\ save for subtraction
-	LDY TempSpace2+1		\\ new minute offset
+	STY TempSpace2			\\ save for subtraction
+	LDY TempMinuteOffset	\\ new minute offset
 	JSR FRAM_writeByte		\\ save new minute offset (C is still set)
 	TYA
 	SED
-	SBC TempSpace2+2		\\ subtract old offset (C still set)
+	SBC TempSpace2			\\ subtract old offset (C still set)
 	PHP						\\ save the carry
 	BCS positive
 	ADC #&60				\\ convert negative minutes
@@ -259,14 +294,14 @@ TempCentury			= TempSpace+7		\\ century, 00 - 99 BCD
 	PHA						\\ save minute difference
 	LDX #NVR_HourOffset
 	JSR FRAM_readByte		\\ look up old hour offset (C is set)
-	STY TempSpace2+2		\\ save for subtraction
-	LDY TempSpace2			\\ new hour offset
+	STY TempSpace2			\\ save for subtraction
+	LDY TempHourOffset		\\ new hour offset
 	JSR FRAM_writeByte		\\ save new hour offset (C is still set)
 	PLA
 	PLP						\\ retrieve carry
 	PHA
 	TYA
-	SBC TempSpace2+2
+	SBC TempSpace2
 	PHA						\\ save hour difference
 	CLD
 	JSR RTC_readTime		\\ read date & time into TempSpace
