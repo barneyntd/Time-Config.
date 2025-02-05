@@ -12,87 +12,10 @@ MonthsCount	= (P% - RTC_MonthsString)/3
 .RTC_DaysString
 	EQUS "SunMonTueWedThuFriSat"
 DaysCount = (P% - RTC_DaysString)/3
-.RTC_BSTString
-	EQUS "UTCGMTBSTWETCETEETMSKASTESTCSTMSTPSTAWTACTAETNZTEATCATWATPKTISTHKTJST"
-BSTCount = (P% - RTC_BSTString)/3
-.RTC_BSTOffset
-	EQUB &0,&0,&1,&0,&1,&2,&3,&96,&95,&94,&93,&92,&08,&09+&40,&10,&12,&3,&2,&1,&05,&05+&40,&8,&9
 .RTC_ListZoneString
-	EQUS " = UTC",0
-.RTC_ListZoneMins
-	EQUS "    :15 :30 :45 "
-
-.RTC_ListZones
-{
-	LDY #0						\\ Y is index through BSTString
-	STY TempSpace				\\ TempSpace is index through BSTOffset
-.listLoop
-	LDX #4
-	LDA #' '					\\ print four spaces
-.spcLoop
-	JSR OSWRCH
-	DEX
-	BNE spcLoop
-	LDX #3
-.firstLoop
-	LDA RTC_BSTString,Y			\\ print character from TLA
-	JSR OSWRCH
-	INY
-	DEX
-	BNE firstLoop
-	LDA RTC_ListZoneString
-.secondLoop
-	JSR OSWRCH					\\ print character from format string
-	INX
-	LDA RTC_ListZoneString,X
-	BNE secondLoop
-	LDX TempSpace
-	LDA RTC_BSTOffset,X
-	BPL offsetNotNeg
-	LDA #'-'
-	JSR OSWRCH
-	LDA #&9A					\\ mangled BCD 100
-	CMP RTC_BSTOffset,X			\\ if minutes == 0, C set
-	SBC RTC_BSTOffset,X			\\ negate offset
-	BNE printOffset
-.offsetNotNeg
-	LDA #'+'
-	JSR OSWRCH
-	LDA RTC_BSTOffset,X
-.printOffset
-	AND #&1F					\\ forget minutes
-	PHA
-	LSR A
-	LSR A
-	LSR A
-	LSR A
-	CLC
-	ADC #'0'					\\ print first digit
-	JSR OSWRCH
-	PLA
-	AND #&0F
-	CLC
-	ADC #'0'					\\ print second digit
-	JSR OSWRCH
-	LDA RTC_BSTOffset,X
-	AND #&60					\\ extract minutes/15 << 5
-	LSR A
-	LSR A
-	LSR A
-	TAX
-.minLoop
-	LDA RTC_ListZoneMins,X
-	JSR OSWRCH
-	INX
-	TXA
-	AND #3
-	BNE minLoop
-	INC TempSpace
-	CPY #BSTCount*3
-	BNE listLoop
-	JSR OSNEWL
-	RTS
-}
+	EQUS " = "
+.RTC_UTCString
+	EQUS "UTC",0,0
 
 \*******************************************************\
 \														\
@@ -225,8 +148,9 @@ BSTCount = (P% - RTC_BSTString)/3
 	JSR RTC_readTime
 .RTC_TimeToABCD				\\ Convert RTC time to Acorn format BCD time
 							\\ OSWORDPtr=buffer address for result, buffer size = 7
-{
 	LDY #6
+.RTC_TimeToABCD2
+{
 	LDA TempSecond			\\ seconds
 	BMI errorTimeBCD		\\ clock integrity failed
 	STA (OSWORDPtr),Y
@@ -553,41 +477,48 @@ ENDIF
 	RTS
 }
 
-.RTC_ParseBST				\\ parse three letter time zone, hours in TempSpace2, mins in TempSpace2+1
+.RTC_ParseTZN				\\ parse three letter time zone, hours in TempSpace+3, mins in TempSpace+4, X=NVRAM loc
 {
-	STY TempSpace2
-	LDA #LO(RTC_BSTString + BSTCount*3)
-	SEC
-	SBC TempSpace2
-	STA TempSpace2
-	LDA #HI(RTC_BSTString + BSTCount*3)
-	SBC #0
-	STA TempSpace2+1
-	LDX #BSTCount
-	JSR RTC_matchWord
-	BMI noMatch2
-	LDA RTC_BSTOffset,X
-	AND #&9F				\\ forget minutes
-	STA TempSpace2
-	LDA RTC_BSTOffset,X
-	LSR A
-	LSR A
-	LSR A
-	LSR A
-	LSR A
-	TAX
-	LDA mult15table,X
-	STA TempSpace2+1
-	SEC
+	STY TempSpace2			\\ save char position
+	LDX #NVR_TZDefs-5		\\ one before start of saved zones
+	STX TempSpace2+1
+	LDX #5
+.utcLoop
+	LDA RTC_UTCString-1,X		\\ copy "UTC",0,0 into TempSpace
+	STA TempTZN-1,X
+	DEX
+	BNE utcLoop
+.nameLoop
+	LDA TempTZN,X
+	CMP (OSWORDPtr),Y
+	BNE nextName
+	INY
+	INX
+	CPX #3
+	BCC nameLoop
+	LDX TempSpace2+1
 	RTS
-.mult15table
-	EQUB &00,&15,&30,&45,&00,&45,&30,&15
+.nextName
+	LDA TempSpace2+1
+	CLC
+	ADC #5
+	CMP #NVR_TZDefs+NVR_TZDefsSpace
+	BCS notFound
+	STA TempSpace2+1
+	TAX
+	LDY #5
+	JSR FRAM_readBytes		\\ read name, hour & minute
+	LDY TempSpace2
+	LDX #0
+	BEQ nameLoop
+.notFound
+	LDY TempSpace2
+	CLC
+	RTS	
 }
 
-.RTC_ParseTimeZone			\\ parse string of the form zzz+hh or zzz-hh, hours in TempSpace2, mins in TempSpace2+1
+.RTC_ParseTimeZone			\\ parse string of the form +hh or -hh, add hours to TempSpace+3
 {
-	JSR RTC_ParseBST		\\ parse TLA
-	BCC noMatch2			\\ not recognised
 	LDA (OSWORDPtr),Y		\\ + or - sign
 	TAX
 	INY
@@ -597,15 +528,15 @@ ENDIF
 	BEQ plusMatch
 	CPX #'-'
 	BNE noMatch2
-	STA TempSpace
-	LDA TempSpace2			\\ load timezone
+	STA TempSpace2
+	LDA TempHourOffset		\\ load timezone
 	SED
-	SBC TempSpace			\\ subtract number; C is set from CPX
+	SBC TempSpace2			\\ subtract number; C is set from CPX
 	JMP limitCheck
 .plusMatch
 	SED
 	CLC
-	ADC TempSpace2			\\ add timezone
+	ADC TempHourOffset		\\ add timezone
 .^limitCheck
 	CLD
 	CMP #&20
@@ -613,7 +544,7 @@ ENDIF
 	CMP #&81
 	BCC noMatch2
 .below20
-	STA TempSpace2
+	STA TempHourOffset
 	SEC
 	RTS
 .^noMatch2
@@ -621,10 +552,8 @@ ENDIF
 	RTS
 }
 
-.RTC_ParseTimeZoneMin			\\ parse string of the form zzz+hh:mm or zzz-hh:mm
+.RTC_ParseTimeZoneMin			\\ parse string of the form :mm or :mm, add mins to TempSpace+4, carry to TempSpace+3
 {
-	JSR RTC_ParseTimeZone
-	BCC noMatch2
 	LDA (OSWORDPtr),Y
 	CMP #':'
 	BNE noMatch2
@@ -635,32 +564,32 @@ ENDIF
 	BEQ plusMatch
 	CPX #'-'
 	BNE noMatch2
-	STA TempSpace
-	LDA TempSpace2+1		\\ timezone minutes
+	STA TempSpace2
+	LDA TempMinuteOffset	\\ timezone minutes
 	SED
-	SBC TempSpace			\\ C is set from CPX
+	SBC TempSpace2			\\ C is set from CPX
 	BCS noCarry
 	ADC #&60
-	STA TempSpace2+1
-	LDA TempSpace2
+	STA TempMinuteOffset
+	LDA TempHourOffset
 	SBC #1					\\ C is set from ADC
 	JMP limitCheck
 .noCarry
-	STA TempSpace2+1
+	STA TempMinuteOffset
 	CLD
 	SEC
 	RTS
 .plusMatch
 	CLC
 	SED
-	ADC TempSpace2+1		\\ timezone minutes
+	ADC TempMinuteOffset	\\ timezone minutes
 	BCS carry1
 	CMP #&60
 	BCC noCarry
 .carry1
 	SBC #&60				\\ carry is set
-	STA TempSpace2+1
-	LDA TempSpace2
+	STA TempMinuteOffset
+	LDA TempHourOffset
 	CLC
 	ADC #1
 	JMP limitCheck

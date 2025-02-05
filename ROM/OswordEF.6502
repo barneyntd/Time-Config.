@@ -102,7 +102,7 @@ ENDIF
 \*******************************************************\
 
 .OSWORDJMPtable
-	EQUW OSW_oneChar-1, OSW_unused-1, RTC_setBSTZone-1, RTC_tuneClock-1
+	EQUW OSW_oneChar-1, OSW_unused-1, RTC_setTZNZone-1, RTC_tuneClock-1
 	EQUW OSW_unused-1, RTC_setTimeZone-1, RTC_incSeconds-1, RTC_setTimeOnly-1
 	EQUW RTC_setTimeZoneMin-1, OSW_unused-1, OSW_unused-1, OSW_unused-1
 	EQUW OSW_unused-1, OSW_unused-1, RTC_setDateOnly-1, OSW_unused-1
