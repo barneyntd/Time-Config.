@@ -74,11 +74,11 @@
 .foundUTC
 	LDX #&FF
 	JSR CMD_doError
-	EQUS 252, "Can't redefine UTC", 0
+	EQUS 176, "Can't redefine UTC", 0
 .badTimezone
 	LDX #helpTimeZone-helpBase
 	JSR CMD_doError
-	EQUS 252, "Bad timezone, expecting ", 0
+	EQUS 220, "Bad timezone, expecting ", 0
 }
 
 .RTC_ListZones

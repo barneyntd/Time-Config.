@@ -12,7 +12,7 @@
 	@%=&90A
 	IF ABS(theta) < 0.015 END
 	PRINT"Last clock correction ";TI%-TS%;" seconds ago"
-	PRINT"(Approximate drift ";-theta/(TI%-TS%)*86400;" seconds per day)"
+	IF TI%-TS%>3600 PRINT"(Approximate drift ";-theta/(TI%-TS%)*86400;" seconds per day)"
 	PRINT"Press","0 to quit"'" ","1 to correct time"
 	W% = TI%-TS%>7000 AND ABS(theta)>2.17E-6*(TI%-TS%):IF W% PRINT" ","2 to correct time and recalibrate clock"'"(Don't recalibrate after leap seconds)"
 	REPEAT:G$=GET$:UNTIL "0"<=G$ AND G$<="2"
@@ -136,7 +136,7 @@
 	IF Sec%<0 THEN Sec%=Sec%+60:Min%=Min%-1
 	IF Min%>=60 THEN Min%=Min%-60:Hr%=Hr%+1
 	IF Min%<0 THEN Min%=Min%+60:Hr%=Hr%-1
-	IF Hr%>=24 OR Hr%<0 PRINT"Please set the date correctly, and run again.":ENDPROC
+	IF Hr%>23 OR Hr%<0 PRINT"Please set the date correctly, and run again.":ENDPROC
 	OSCLI("TIME "+FNunsigned(Hr%)+":"+FNunsigned(Min%)+":"+FNunsigned(Sec%))
 	PRINT"Please run again for more precise correction."
 	ENDPROC
