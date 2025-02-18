@@ -146,7 +146,7 @@
 	LOCAL C%
 	C%=INT(theta*460800/(TI%-TS%)+0.5)
 	IF ABS(C%)>63 OR C%=0 ENDPROC
-	OSCLI("TIME T"+FNsigned(C%))
+	OSCLI("TIME T"+FNsigned(-C%))
 	ENDPROC
 
 

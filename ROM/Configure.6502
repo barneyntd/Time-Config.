@@ -134,7 +134,7 @@
 .^badParam
 	LDX TempSpace+3						\\ load parameter type
 	JSR CMD_doError
-	EQUS 220, "Bad parameter, expecting ", 0
+	EQUS 252, "Bad parameter, expecting ", 0
 }	
 
 
@@ -427,7 +427,7 @@
 	BCC searchLoop
 	LDX #&FF
 	JSR CMD_doError
-	EQUS 133, "Timezones full", 0
+	EQUS 190, "Timezones full", 0
 .foundSpace
 	LDY TempSpace2					\\ character pos saved in RTC_ParseTZN
 	JSR GSREAD

@@ -210,5 +210,7 @@ PUTTEXT "../Timezones/Far East.txt", "FarEast", &0000
 PUTTEXT "../Timezones/Subcontinent.txt", "Subcont", &0000
 PUTTEXT "../Timezones/USA.txt", "USA", &0000
 
+PUTBASIC "../Examples/DST.bas", "DST"
+
 
 

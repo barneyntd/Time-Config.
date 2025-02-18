@@ -260,7 +260,7 @@ ENDIF
 	BCS doneTime
 	LDX #&FF
 	JSR CMD_doError
-	EQUS 252, "Bad time", 0
+	EQUS 220, "Bad timestr", 0
 }
 
 .CMD_Configure
