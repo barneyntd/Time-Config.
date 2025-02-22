@@ -22,6 +22,8 @@ OSB_SerialFormat	= &9C
 OSB_BreakType		= &FD
 OSB_KbdStartOpt		= &FF
 
+OSW_NetStationInfo	= &13
+
 NVR_EconetStation	= 0
 NVR_EconetServer	= 1
 NVR_EconetServerNet	= 2
@@ -40,10 +42,12 @@ NVR_BellBSFormat	= 16
 NVR_NVRSize			= 255
 
 .SET_DefaultsTable
-\\	EQUB &FE				\\ address 1: FS station
-\\	EQUB 0					\\ address 2: FS network
-\\	EQUB &EB				\\ address 3: PS station
-\\	EQUB 0					\\ address 4: PS network
+IF CONFIGFSPS
+	EQUB &FE				\\ address 1: FS station
+	EQUB 0					\\ address 2: FS network
+	EQUB &EB				\\ address 3: PS station
+	EQUB 0					\\ address 4: PS network
+ENDIF
 	EQUB %11111111			\\ address 5: FILE & LANG
 	EQUB %11111111			\\ address 6: ROM 0-7
 	EQUB %11111111			\\ address 7: ROM 8-F
@@ -62,7 +66,7 @@ SET_Defaults = P% - 17
 
 .SET_Reset
 {
-	LDX #5
+	LDX #SET_DefaultsTable - SET_Defaults
 	CLC
 .resetLoop
 	LDY SET_Defaults,X
@@ -156,6 +160,11 @@ SET_Defaults = P% - 17
 .resetSettings
 	JSR SET_Reset
 .hardBreak
+IF CONFIGFSPS
+	LDX OS_ROMNum
+	LDA #&80
+	STA OS_RomBytes,X		\\ set hard break flag
+ENDIF
 	LDX #NVR_VDUSettings
 	CLC
 	JSR FRAM_readByte
@@ -367,12 +376,33 @@ SET_Defaults = P% - 17
 {
 	TYA
 	PHA
+IF CONFIGFSPS
+	CLC
+	LDX #NVR_EconetPrintNet
+	JSR FRAM_readByte		\\ read default print server network
+	TYA
+	PHA
+	LDX #NVR_EconetPrint
+	JSR FRAM_readByte		\\ read default print server address
+	TYA
+	PHA
+	LDA #3					\\ osword &13 subcall 
+	PHA
+	TSX
+	INX
+	LDY #&01
+	LDA #OSW_NetStationInfo
+	JSR OSWORD
+	PLA
+	PLA
+	PLA
+ENDIF
 	LDA #OSB_KbdScanAll
 	JSR OSBYTE
 	CPX #&FF
 	BNE noDefaultFS			\\ key pressed, so ignore default
-	LDX #NVR_DefaultRoms
 	CLC
+	LDX #NVR_DefaultRoms
 	JSR FRAM_readByte		\\ read default roms
 	TYA
 	AND #&0F				\\ default file system rom
@@ -387,6 +417,53 @@ SET_Defaults = P% - 17
 	LDA #3
 	RTS
 }
+
+\*******************************************************\
+\														\
+\				Service call 0F: vectors claimed		\
+\														\
+\*******************************************************\
+
+IF CONFIGFSPS
+.SET_fileServer
+{
+	LDA OS_RomBytes,X		\\ check hard break flag
+	BPL notFileServer
+	LDA #0
+	TAX
+	JSR OSARGS				\\ get filing system number
+	CMP #5
+	BNE notFileServer
+	LDX OS_ROMNum
+	LDA #0
+	STA OS_RomBytes,X		\\ clear hard break flag
+	TYA
+	PHA
+	LDX #NVR_EconetServerNet
+	JSR FRAM_readByte		\\ read default print server network
+	TYA
+	PHA
+	LDX #NVR_EconetServer
+	JSR FRAM_readByte		\\ read default print server address
+	TYA
+	PHA
+	LDA #1					\\ osword &13 subcall 
+	PHA
+	TSX
+	INX
+	LDY #&01
+	LDA #OSW_NetStationInfo
+	JSR OSWORD
+	PLA
+	PLA
+	PLA
+	PLA
+	TAY
+.notFileServer
+	LDA #F
+	RTS
+}
+ENDIF
 
 \*******************************************************\
 \														\

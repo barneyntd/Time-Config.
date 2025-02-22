@@ -10,6 +10,7 @@ ErrorPtr	= &FD
 TempSpace	= &A8		\\ A8 - AF supposed to be usable for OS commands
 TempSpace2	= &E4		\\ E4 - E6 general purpose, used by GSINIT/GSREAD
 OSBYTE		= &FFF4
+OSWORD		= &FFF1
 EVENTV		= &220
 OSASCI		= &FFE3
 OSWRCH		= &FFEE
@@ -18,11 +19,13 @@ GSREAD		= &FFC5
 GSINIT		= &FFC2
 OSRDRM		= &FFB9
 OS_RomTable	= &02A1
+OS_RomBytes = &0DF0
 OS_ROMNum	= &F4
 
 
 
 OSWORDE8	= 0			\\ 1 = implement OSWRD 14,9 & OSWRD 14,10: like 14,1 & 14,2, but with century
+CONFIGFSPS	= 0			\\ 1 = implement CONFIGURE FS and PS
 
 ORG &8000
 
@@ -107,6 +110,12 @@ ORG &8000
 	BNE notHelp
 	JMP Help				\\ perform *HELP
 .notHelp
+IF CONFIGFSPS
+	CMP #&F					\\ vectors claimed
+	BNE notFileServer
+	JMP SET_fileServer
+.notFileServer
+ENDIF
 	CMP #&28
 	BNE notUnKnConf
 	JMP CON_Configure		\\ perform CONFIGURE service
