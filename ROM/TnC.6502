@@ -18,6 +18,7 @@ OSNEWL		= &FFE7
 GSREAD		= &FFC5
 GSINIT		= &FFC2
 OSRDRM		= &FFB9
+OSARGS		= &FFDA
 OS_RomTable	= &02A1
 OS_RomBytes = &0DF0
 OS_ROMNum	= &F4
@@ -25,7 +26,7 @@ OS_ROMNum	= &F4
 
 
 OSWORDE8	= 0			\\ 1 = implement OSWRD 14,9 & OSWRD 14,10: like 14,1 & 14,2, but with century
-CONFIGFSPS	= 0			\\ 1 = implement CONFIGURE FS and PS
+CONFIGFSPS	= 1			\\ 1 = implement CONFIGURE FS and PS
 
 ORG &8000
 
@@ -195,6 +196,7 @@ ENDIF
 
 
 
+INCLUDE "Settings.6502"
 INCLUDE "VIA.6502"
 INCLUDE "Time.6502"
 INCLUDE "TimeStrings.6502"
@@ -202,7 +204,6 @@ INCLUDE "Commands.6502"
 INCLUDE "Configure.6502"
 INCLUDE "Strings.6502"
 INCLUDE "Roms.6502"
-INCLUDE "Settings.6502"
 INCLUDE "OswordEF.6502"
 INCLUDE "SaveTimes.6502"
 

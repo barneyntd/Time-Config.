@@ -35,8 +35,10 @@
 	EQUS "<0-255>",0
 .helpTV
 	EQUS "<252-3>(,<0-1>)",0
-\\.helpSid
-\\	EQUS "(<0-127>.)<0-255>",0
+IF CONFIGFSPS
+.helpSid
+	EQUS "(<0-127>.)<0-255>",0
+ENDIF
 .helpAlt
 	EQUS " /",0								\\ must be last
 
@@ -76,6 +78,10 @@ ENDIF
 	EQUS "REPEAT", help255 - helpBase
 	EQUS "TV", helpTV - helpBase
 	EQUS "TIMEZONE", helpTimeZone - helpBase
+IF CONFIGFSPS
+	EQUS "FS", helpSid - helpBase
+	EQUS "PS", helpSid - helpBase
+ENDIF
 \\	EQUS "INTUBE", helpAlt - helpBase
 \\	EQUS "EXTUBE", &FF
 \\	EQUS "SCROLL", helpAlt - helpBase
@@ -84,9 +90,7 @@ ENDIF
 \\	EQUS "NODIR", &FF
 \\	EQUS "FLOPPY", helpAlt - helpBase
 \\	EQUS "HARD", &FF
-\\	EQUS "FS", helpSid - helpBase
-\\	EQUS "PS", helpSid - helpBase
-\\	EQUS "SPACE", LDA commandTable-1,X
+\\	EQUS "SPACE", helpAlt - helpBase
 \\	EQUS "NOSPACE", &FF
 	EQUB 0
 

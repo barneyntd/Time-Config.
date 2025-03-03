@@ -24,6 +24,10 @@
 	EQUB 13,	0,			8				\\ REPEAT
 	EQUB 0:		EQUW CON_TV-1				\\ TV
 	EQUB 0:		EQUW CON_Timezone-1			\\ TIMEZONE
+IF CONFIGFSPS
+	EQUB 0:		EQUW CON_FS-1				\\ FS
+	EQUB 0:		EQUW CON_PS-1				\\ PS
+ENDIF
 \\	EQUB 16,	%11111011,	%00000000		\\ INTUBE
 \\	EQUB 16,	%11111011,	%00000100		\\ EXTUBE
 \\	EQUB 16,	%11110111,	%00000000		\\ SCROLL
@@ -32,8 +36,6 @@
 \\	EQUB 11,	%10111111,	%01000000		\\ NODIR	-- ADFS
 \\	EQUB 11,	%01111111,	%10000000		\\ FLOPPY	-- ADFS
 \\	EQUB 11,	%01111111,	%00000000		\\ HARD		-- ADFS
-\\	EQUB 0:		EQUW CON_FS-1				\\ FS		-- ANFS
-\\	EQUB 0:		EQUW CON_PS-1				\\ PS		-- ANFS
 \\	EQUB 17,	%11111110,  %00000001		\\ SPACE	-- ANFS
 \\	EQUB 17,	%11111110,  %00000000		\\ NOSPACE	-- ANFS
 
@@ -275,7 +277,7 @@
 	ASL A
 	ASL A
 	STA TempSpace+2
-	LDX #15
+	LDX #NVR_TubeSerialPrint
 	CLC
 	JSR FRAM_readByte					\\ read NVRAM from address 15
 	TYA
@@ -287,7 +289,7 @@
 	RTS
 
 .baudStatus
-	LDX #15
+	LDX #NVR_TubeSerialPrint
 	CLC
 	JSR FRAM_readByte					\\ read NVRAM from address 15
 	TYA									\\ result
@@ -342,7 +344,7 @@
 	ASL A
 	ASL A
 	STA TempSpace+1
-	LDX #10
+	LDX #NVR_VDUSettings
 	CLC
 	JSR FRAM_readByte				\\ read NVRAM from address 10
 	TYA
@@ -354,7 +356,7 @@
 	RTS
 
 .tvStatus
-	LDX #10
+	LDX #NVR_VDUSettings
 	CLC
 	JSR FRAM_readByte				\\ read NVRAM from address 10
 	TYA								\\ result
@@ -383,7 +385,107 @@
 	JMP endLine
 }
 
+IF CONFIGFSPS
+.CON_FSPS
+{
+	LDY TempSpace					\\ get character pos
+	JSR STR_ParseDec				\\ read numeric parameter
+	BCS doNetwork
+	BNE badParam2
+	LDA #0							\\ default network 0
+	STA TempSpace+1
+	BEQ defaultFS
+.doNetwork
+	STA TempSpace+1
+	JSR GSREAD
+	BCC dot
+	LDA TempSpace+1					\\ no dot, so last value was server ID
+	LDX #0
+	STX TempSpace+1					\\ default network 0
+	BCS writeFS
+.dot
+	CMP #'.'						\\ check for full stop
+	BNE badParam2
+	JSR STR_ParseDec				\\ read numeric parameter
+	BCS writeFS
+	BNE badParam2
+.defaultFS
+	CLC								\\ use default ID
+.writeFS
+	BIT TempSpace+1					\\ check network <= 127
+	BMI badParam2
+	RTS
+.badParam2
+	JMP badParam
+}
 
+.CON_FS
+{
+	BCC fsStatus
+	JSR CON_FSPS
+	BCS notDefault
+	LDA #&FE						\\ default file server ID 254
+.notDefault
+	TAY
+	CLC
+	LDX #NVR_EconetServer
+	JSR FRAM_writeByte
+	LDX #NVR_EconetServerNet
+	LDY TempSpace+1
+	JSR FRAM_writeByte
+	LDA #0
+	RTS
+
+.fsStatus
+	LDX #NVR_EconetServer
+	CLC
+	JSR FRAM_readByte				\\ read NVRAM from address 1
+	STY TempSpace
+	LDX #NVR_EconetServerNet
+.^fspsStatus
+	JSR FRAM_readByte
+	TYA
+	PHA
+	LDX TempSpace+2					\\ start of this term
+	JSR CMD_printTerm
+	LDA #' '
+	JSR OSWRCH
+	PLA
+	JSR STR_PrintNum
+	LDA #'.'
+	JSR OSWRCH
+	LDA TempSpace
+	JSR STR_PrintNum
+	LDY TempSpace+1
+	JMP endLine
+}
+
+.CON_PS
+{
+	BCC psStatus
+	JSR CON_FSPS
+	BCS notDefault
+	LDA #&EB						\\ default print server ID 235
+.notDefault
+	TAY
+	CLC
+	LDX #NVR_EconetPrint
+	JSR FRAM_writeByte
+	LDX #NVR_EconetPrintNet
+	LDY TempSpace+1
+	JSR FRAM_writeByte
+	LDA #0
+	RTS
+	
+.psStatus
+	LDX #NVR_EconetPrint
+	CLC
+	JSR FRAM_readByte				\\ read NVRAM from address 3
+	STY TempSpace
+	LDX #NVR_EconetPrintNet
+	JMP fspsStatus
+}
+ENDIF
 
 .timezoneStatus
 	LDX TempSpace+2					\\ start of this term
@@ -471,3 +573,4 @@
 	JSR CMD_doError
 	EQUS 204, "Bad timezone name", 0
 }
+

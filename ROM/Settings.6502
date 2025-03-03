@@ -430,7 +430,7 @@ IF CONFIGFSPS
 	LDA OS_RomBytes,X		\\ check hard break flag
 	BPL notFileServer
 	LDA #0
-	TAX
+	TAY
 	JSR OSARGS				\\ get filing system number
 	CMP #5
 	BNE notFileServer
@@ -440,11 +440,11 @@ IF CONFIGFSPS
 	TYA
 	PHA
 	LDX #NVR_EconetServerNet
-	JSR FRAM_readByte		\\ read default print server network
+	JSR FRAM_readByte		\\ read default file server network
 	TYA
 	PHA
 	LDX #NVR_EconetServer
-	JSR FRAM_readByte		\\ read default print server address
+	JSR FRAM_readByte		\\ read default file server address
 	TYA
 	PHA
 	LDA #1					\\ osword &13 subcall 
@@ -460,7 +460,7 @@ IF CONFIGFSPS
 	PLA
 	TAY
 .notFileServer
-	LDA #F
+	LDA #&F
 	RTS
 }
 ENDIF

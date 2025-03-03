@@ -31,6 +31,10 @@
 	CMP #helpRom - helpBase
 	BEQ printDigit1
 	PLA
+	CMP #10
+	BCC STR_printDigit
+	CMP #100
+	BCC print2Digits
 	LDY #0
 	SEC
 .loop100
@@ -39,12 +43,11 @@
 	BCS loop100
 	ADC #100
 	DEY
-	BEQ no100s
 	PHA
 	TYA
 	JSR STR_printDigit
 	PLA
-.no100s
+.print2Digits
 	LDY #0
 	SEC
 .loop10
@@ -54,7 +57,6 @@
 	ADC #10
 	PHA
 	DEY
-	BEQ printDigit1
 	TYA
 	JSR STR_printDigit
 .printDigit1
