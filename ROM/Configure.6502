@@ -28,16 +28,6 @@ IF CONFIGFSPS
 	EQUB 0:		EQUW CON_FS-1				\\ FS
 	EQUB 0:		EQUW CON_PS-1				\\ PS
 ENDIF
-\\	EQUB 16,	%11111011,	%00000000		\\ INTUBE
-\\	EQUB 16,	%11111011,	%00000100		\\ EXTUBE
-\\	EQUB 16,	%11110111,	%00000000		\\ SCROLL
-\\	EQUB 16,	%11110111,	%00001000		\\ NOSCROLL
-\\	EQUB 11,	%10111111,	%00000000		\\ DIR		-- ADFS
-\\	EQUB 11,	%10111111,	%01000000		\\ NODIR	-- ADFS
-\\	EQUB 11,	%01111111,	%10000000		\\ FLOPPY	-- ADFS
-\\	EQUB 11,	%01111111,	%00000000		\\ HARD		-- ADFS
-\\	EQUB 17,	%11111110,  %00000001		\\ SPACE	-- ANFS
-\\	EQUB 17,	%11111110,  %00000000		\\ NOSPACE	-- ANFS
 
 .CON_Configure
 {
@@ -139,7 +129,6 @@ ENDIF
 	EQUS 252, "Bad parameter, expecting ", 0
 }	
 
-
 .CON_Status
 {
 	LDX #configTable - commandTable		\\ start searching for config term
@@ -209,8 +198,7 @@ ENDIF
 .nothing
 	LDA #0
 	RTS
-
-.termDone
+.notFSPS
 	PLA
 	TAY
 .passStatus
@@ -235,6 +223,17 @@ ENDIF
 	INY
 	INY
 	BNE termLoop1						\\ always
+.termDone
+IF CONFIGFSPS
+	CPX #fspsTable-commandTable
+	BNE notFSPS
+	LDX OS_ROMNum
+	LDA OS_RomBytes,X
+	AND #&40
+	BEQ notFSPS
+	LDX #fspsTable-commandTable
+	BNE termLoop1						\\ always
+ENDIF
 }
 
 .CON_ReadKeySwitches

@@ -78,21 +78,13 @@ ENDIF
 	EQUS "REPEAT", help255 - helpBase
 	EQUS "TV", helpTV - helpBase
 	EQUS "TIMEZONE", helpTimeZone - helpBase
+	EQUB 0
 IF CONFIGFSPS
+.fspsTable
 	EQUS "FS", helpSid - helpBase
 	EQUS "PS", helpSid - helpBase
-ENDIF
-\\	EQUS "INTUBE", helpAlt - helpBase
-\\	EQUS "EXTUBE", &FF
-\\	EQUS "SCROLL", helpAlt - helpBase
-\\	EQUS "NOSCROLL", &FF
-\\	EQUS "DIR", helpAlt - helpBase
-\\	EQUS "NODIR", &FF
-\\	EQUS "FLOPPY", helpAlt - helpBase
-\\	EQUS "HARD", &FF
-\\	EQUS "SPACE", helpAlt - helpBase
-\\	EQUS "NOSPACE", &FF
 	EQUB 0
+ENDIF
 
 .helpTable
 	EQUS "T&C",&FF
@@ -137,6 +129,17 @@ ENDIF
 	JSR OSNEWL
 	LDA commandTable,X
 	BNE CMD_Help
+IF CONFIGFSPS
+	CPX #fspsTable-commandTable-1
+	BNE notFSPS
+	LDX OS_ROMNum
+	LDA OS_RomBytes,X
+	AND #&40
+	BEQ notFSPS
+	LDX #fspsTable-commandTable
+	BNE CMD_Help
+.notFSPS
+ENDIF
 	RTS
 }
 
@@ -178,11 +181,22 @@ ENDIF
 .notMatch
 	LDA commandTable,X
 	BPL	skipLoop2					\\ skip over unmatched word
-	INC TempSpace+1				\\ increment table index
+	INC TempSpace+1					\\ increment table index
 	LDY TempSpace					\\ go back to start of word
 	INX								\\ next word in table
 	LDA commandTable,X				\\ check for table end
 	BNE wordLoop
+IF CONFIGFSPS
+	CPX #fspsTable-commandTable-1
+	BNE notFSPS
+	LDX OS_ROMNum
+	LDA OS_RomBytes,X
+	AND #&40
+	BEQ notFSPS
+	LDX #fspsTable-commandTable
+	BNE wordLoop
+.notFSPS
+ENDIF
 	LDA #4
 .blankCommand
 	RTS

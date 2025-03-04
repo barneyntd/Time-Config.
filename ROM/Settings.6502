@@ -377,6 +377,22 @@ ENDIF
 	TYA
 	PHA
 IF CONFIGFSPS
+	LDA #0
+	PHA
+	LDA #8					\\ osword &13 subcall: read station number
+	PHA
+	TSX
+	INX
+	LDY #&01
+	LDA #OSW_NetStationInfo
+	JSR OSWORD
+	PLA
+	PLA
+	BEQ noNet
+	LDX OS_ROMNum
+	LDA OS_RomBytes,X
+	ORA #&40
+	STA OS_RomBytes,X		\\ set net exists flag
 	CLC
 	LDX #NVR_EconetPrintNet
 	JSR FRAM_readByte		\\ read default print server network
@@ -386,7 +402,7 @@ IF CONFIGFSPS
 	JSR FRAM_readByte		\\ read default print server address
 	TYA
 	PHA
-	LDA #3					\\ osword &13 subcall 
+	LDA #3					\\ osword &13 subcall: set print server
 	PHA
 	TSX
 	INX
@@ -396,6 +412,7 @@ IF CONFIGFSPS
 	PLA
 	PLA
 	PLA
+.noNet
 ENDIF
 	LDA #OSB_KbdScanAll
 	JSR OSBYTE
