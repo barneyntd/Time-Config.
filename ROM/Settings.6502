@@ -377,6 +377,12 @@ ENDIF
 	TYA
 	PHA
 IF CONFIGFSPS
+	LDA #OSB_BreakType
+	LDX #0
+	LDY #&FF
+	JSR OSBYTE				\\ look up break type
+	TXA
+	BEQ noNet				\\ not hard break, so don't do anything
 	LDA #0
 	PHA
 	LDA #8					\\ osword &13 subcall: read station number
@@ -388,7 +394,7 @@ IF CONFIGFSPS
 	JSR OSWORD
 	PLA
 	PLA
-	BEQ noNet
+	BEQ noNet				\\ no station number, so no net
 	LDX OS_ROMNum
 	LDA OS_RomBytes,X
 	ORA #&40
@@ -444,6 +450,8 @@ ENDIF
 IF CONFIGFSPS
 .SET_fileServer
 {
+	TYA
+	PHA
 	LDA OS_RomBytes,X		\\ check hard break flag
 	BPL notFileServer
 	LDA #0
@@ -452,10 +460,9 @@ IF CONFIGFSPS
 	CMP #5
 	BNE notFileServer
 	LDX OS_ROMNum
-	LDA #0
-	STA OS_RomBytes,X		\\ clear hard break flag
-	TYA
-	PHA
+	LDA #&40
+	STA OS_RomBytes,X		\\ clear hard break, set net present
+	CLC
 	LDX #NVR_EconetServerNet
 	JSR FRAM_readByte		\\ read default file server network
 	TYA
@@ -474,9 +481,9 @@ IF CONFIGFSPS
 	PLA
 	PLA
 	PLA
+.notFileServer
 	PLA
 	TAY
-.notFileServer
 	LDA #&F
 	RTS
 }
