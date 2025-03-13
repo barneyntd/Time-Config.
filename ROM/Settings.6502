@@ -4,6 +4,7 @@ ScreenInit			= &C300
 
 OSB_KbdScan			= &79
 OSB_KbdScanAll		= &7A
+OSB_WrCurKeys		= &78
 OSB_KeyRptDelay		= &0B
 OSB_KeyRtpRate		= &0C
 OSB_CapsSetting		= &CA
@@ -142,13 +143,23 @@ SET_Defaults = P% - 17
 	LDA #OSB_KbdScan
 	JSR OSBYTE				\\ check for R key pressed
 	TXA
-	BMI resetSettings
+	BPL notRKey
+	LDA #OSB_WrCurKeys
+	JSR OSBYTE				\\ write current keys pressed info
+	JMP resetSettings
+.notRKey
 	LDA #OSB_BreakType
 	LDX #0
 	LDY #&FF
 	JSR OSBYTE				\\ look up break type
 	TXA
 	BNE hardBreak
+	LDX #NVR_Roms07Status
+	LDA #0
+	JSR unplugRoms				\\ unlpug roms 0-7
+	LDX #NVR_Roms8FStatus
+	LDA #8
+	JSR unplugRoms				\\ unplug roms 8-F	
 .done
 	PLA
 	TAY
