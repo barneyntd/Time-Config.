@@ -148,18 +148,19 @@ SET_Defaults = P% - 17
 	JSR OSBYTE				\\ write current keys pressed info
 	JMP resetSettings
 .notRKey
+	LDX #NVR_Roms07Status	\\ rom unplugging happens even on soft breaks
+	LDA #0
+	JSR unplugRoms				\\ unplug roms 0-7
+	LDX #NVR_Roms8FStatus
+	LDA #8
+	JSR unplugRoms				\\ unplug roms 8-F	
+
 	LDA #OSB_BreakType
 	LDX #0
 	LDY #&FF
 	JSR OSBYTE				\\ look up break type
 	TXA
 	BNE hardBreak
-	LDX #NVR_Roms07Status
-	LDA #0
-	JSR unplugRoms				\\ unlpug roms 0-7
-	LDX #NVR_Roms8FStatus
-	LDA #8
-	JSR unplugRoms				\\ unplug roms 8-F	
 .done
 	PLA
 	TAY
@@ -229,13 +230,6 @@ ENDIF
 	JSR OSBYTE
 	LDA TempSpace				\\ get screen mode (other bits ignored)
 	JSR ScreenInit				\\ reset video with new settings
-
-	LDX #NVR_Roms07Status
-	LDA #0
-	JSR unplugRoms				\\ unlpug roms 0-7
-	LDX #NVR_Roms8FStatus
-	LDA #8
-	JSR unplugRoms				\\ unplug roms 8-F
 
 	LDX #NVR_CapsFDSettings
 	CLC

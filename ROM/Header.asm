@@ -25,12 +25,7 @@ OS_ROMNum	= &F4
 
 
 
-OSWORDE8	= 0			\\ 1 = implement OSWRD 14,9 & OSWRD 14,10: like 14,1 & 14,2, but with century
-CONFIGFSPS	= 1			\\ 1 = implement CONFIGURE FS and PS
 
-ORG &8000
-
-.codeStart
 
 \*******************************************************\
 \														\
@@ -196,31 +191,7 @@ ENDIF
 
 
 
-INCLUDE "Settings.6502"
-INCLUDE "VIA.6502"
-INCLUDE "Time.6502"
-INCLUDE "TimeStrings.6502"
-INCLUDE "Commands.6502"
-INCLUDE "Configure.6502"
-INCLUDE "Strings.6502"
-INCLUDE "Roms.6502"
-INCLUDE "OswordEF.6502"
-INCLUDE "SaveTimes.6502"
 
-
-.codeEnd
-
-PRINT "Code size ", codeEnd - codeStart, "bytes"
-SAVE "TnC", codeStart, codeEnd, VIA_setup
-PUTBASIC "../sntp/SNTPoS.bas", "SNTPoS"
-PUTTEXT "../Timezones/Africa.txt", "Africa", &0000
-PUTTEXT "../Timezones/Australasia.txt", "Austral", &0000
-PUTTEXT "../Timezones/Europe.txt", "Europe", &0000
-PUTTEXT "../Timezones/Far East.txt", "FarEast", &0000
-PUTTEXT "../Timezones/Subcontinent.txt", "Subcont", &0000
-PUTTEXT "../Timezones/USA.txt", "USA", &0000
-
-PUTBASIC "../Examples/DST.bas", "DST"
 
 
 

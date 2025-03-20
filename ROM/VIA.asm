@@ -1,5 +1,4 @@
 \ User VIA registers
-VIA_BASE 		= &FCB0
 VIA_iorb		= VIA_BASE
 VIA_ddrb		= VIA_BASE + &02
 VIA_t2cl		= VIA_BASE + &08
