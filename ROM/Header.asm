@@ -22,6 +22,7 @@ OSARGS		= &FFDA
 OS_RomTable	= &02A1
 OS_RomBytes = &0DF0
 OS_ROMNum	= &F4
+ROMSEL		= &FE30
 
 
 
@@ -36,7 +37,9 @@ OS_ROMNum	= &F4
 	JMP SET_defaultLang				\\ pretend to be a language
 	JMP ROM_service
 	EQUB %11000010					\\ 6502 code, no relocation, language, service
+.ROM_copyrightOffset
 	EQUB ROM_copyright - codeStart - 1
+.ROM_versionBin
 	EQUB 04							\\ version 04
 .ROM_title
 	EQUS "Time & Config.", 0		\\ Title

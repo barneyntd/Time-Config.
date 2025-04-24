@@ -54,11 +54,47 @@
 
 .CMD_Roms
 {
+	LDY #swramCheckEnd-swramCheck-1
+.copyLoop
+	LDA swramCheck,Y
+	STA &100,Y
+	DEY
+	BPL copyLoop
+	
 	LDY #15
 .romsLoop
 	STY TempSpace
+	LDA #HI(ROM_versionBin)
+	STA ReadRomPtr+1
+	LDA #LO(ROM_versionBin)
+	STA ReadRomPtr
+	JSR OSRDRM
+	STA TempSpace+2
+	LDY TempSpace
+	EOR #&FF	
+	LDX OS_ROMNum
+	JSR &100
+	JSR OSRDRM
+	LDY TempSpace
+	EOR #&FF
+	EOR TempSpace+2
+	BNE notSWRam
+	LDA TempSpace+2
+	LDX OS_ROMNum
+	JSR &100
+	LDA #0
+	BEQ swRam
+.notSWRam
 	LDA OS_RomTable,Y
-	BEQ emptySlot
+	BNE swRam
+.emptySlot
+	LDY TempSpace
+	DEY
+	BPL romsLoop
+	LDA #0
+	RTS
+.swRam
+	STA TempSpace+2
 	JSR STR_PrintString
 	EQUS "  Rom ",0	
 	LDA TempSpace
@@ -92,11 +128,21 @@
 	LDA #'L'
 .notLang
 	JSR OSWRCH
-	JSR STR_PrintString
-	EQUS ")",0
-	LDA #&80
+	LDA TempSpace+2
+	BEQ swRam2
+	LDA #' '
+	BNE notSWRam2
+.swRam2
+	LDA #'W'
+.notSWRam2	
+	JSR OSWRCH
+	LDA #')'
+	JSR OSWRCH
+	LDA OS_RomTable,Y
+	BEQ emptySWRam
+	LDA #HI(ROM_copyrightOffset)
 	STA ReadRomPtr+1
-	LDA #&07
+	LDA #LO(ROM_copyrightOffset)
 	STA ReadRomPtr
 	LDY TempSpace
 	JSR OSRDRM
@@ -110,13 +156,13 @@
 	JSR printRomStr		
 .noVersion
 	JSR OSNEWL
-.emptySlot
-	LDY TempSpace
-	DEY
-	BPL romsLoop
-	LDA #0
-	RTS
-
+	JMP emptySlot
+	
+.emptySWRam
+	JSR STR_PrintString
+	EQUS " -Empty SWRAM-",0
+	JMP noVersion
+	
 .printRomStr
 	LDA #' '
 .titleLoop
@@ -126,5 +172,14 @@
 	JSR OSRDRM
 	BNE titleLoop
 	RTS
+	
+.swramCheck
+	STY OS_ROMNum
+	STY ROMSEL
+	STA ROM_versionBin
+	STX OS_ROMNum
+	STX ROMSEL
+	RTS
+.swramCheckEnd
 }
 
